@@ -44,7 +44,14 @@ class Agent:
     def _import_handlers(self) -> None:
         """Import all handler modules to ensure tools are registered."""
         # Import to trigger registration
-        from alfredo.tools.handlers import command, discovery, file_ops, workflow  # noqa: F401
+        from alfredo.tools.handlers import (  # noqa: F401
+            code_analysis,
+            command,
+            discovery,
+            file_ops,
+            web,
+            workflow,
+        )
 
     def get_system_prompt(self, tool_ids: Optional[list[str]] = None, include_examples: bool = False) -> str:
         """Get the system prompt for the model.

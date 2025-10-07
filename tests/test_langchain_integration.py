@@ -145,3 +145,66 @@ def test_specific_tools_conversion() -> None:
     tool_names = [tool.name for tool in tools]
     assert "read_file" in tool_names
     assert "write_to_file" in tool_names
+
+
+@pytest.mark.skipif(not LANGCHAIN_AVAILABLE, reason="LangChain not installed")
+def test_langchain_list_code_definitions() -> None:
+    """Test list_code_definition_names through LangChain."""
+    with TemporaryDirectory() as tmpdir:
+        tmppath = Path(tmpdir)
+
+        # Create a sample Python file
+        (tmppath / "sample.py").write_text(
+            """
+def my_function():
+    pass
+
+class MyClass:
+    pass
+"""
+        )
+
+        # Create tool
+        tool = create_langchain_tool("list_code_definition_names", cwd=str(tmppath))
+
+        # Invoke
+        result = tool.invoke({"path": "."})
+
+        assert "sample.py" in result
+        assert "my_function" in result
+        assert "MyClass" in result
+
+
+@pytest.mark.skipif(not LANGCHAIN_AVAILABLE, reason="LangChain not installed")
+def test_langchain_web_fetch() -> None:
+    """Test web_fetch tool conversion to LangChain."""
+    from unittest.mock import Mock, patch
+
+    # Create mock response
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.headers = {"content-type": "text/html"}
+    mock_response.text = "<html><body><h1>Test</h1></body></html>"
+    mock_response.raise_for_status = Mock()
+
+    with patch("alfredo.tools.handlers.web.requests.get", return_value=mock_response):
+        # Create tool
+        tool = create_langchain_tool("web_fetch")
+
+        # Invoke
+        result = tool.invoke({"url": "https://example.com"})
+
+        assert "Test" in result
+        assert "example.com" in result
+
+
+@pytest.mark.skipif(not LANGCHAIN_AVAILABLE, reason="LangChain not installed")
+def test_new_tools_in_all_tools_list() -> None:
+    """Test that new tools are included in create_all_langchain_tools."""
+    tools = create_all_langchain_tools()
+
+    tool_names = [tool.name for tool in tools]
+
+    # Check new tools are present
+    assert "list_code_definition_names" in tool_names
+    assert "web_fetch" in tool_names

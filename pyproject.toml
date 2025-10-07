@@ -17,6 +17,15 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
+dependencies = [
+    "beautifulsoup4>=4.14.2",
+    "html2text>=2025.4.15",
+    "requests>=2.32.5",
+    "tree-sitter>=0.23.2",
+    "tree-sitter-javascript>=0.23.1",
+    "tree-sitter-python>=0.23.6",
+    "tree-sitter-typescript>=0.23.2",
+]
 
 [project.urls]
 Homepage = "https://fcarli.github.io/alfredo/"
@@ -33,14 +42,14 @@ dev = [
     "pytest>=7.2.0",
     "pre-commit>=2.20.0",
     "tox-uv>=1.11.3",
-
     "mypy>=0.991",
-
     "ruff>=0.11.5",
     "vulture>=2.14",
     "mkdocs>=1.4.2",
     "mkdocs-material>=8.5.10",
     "mkdocstrings[python]>=0.26.1",
+    "types-requests>=2.32.4.20250913",
+    "types-beautifulsoup4>=4.12.0.20250516",
 ]
 
 [build-system]
@@ -64,6 +73,16 @@ show_error_codes = true
 module = "alfredo.integrations.langchain"
 disallow_any_unimported = false
 warn_return_any = false
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "alfredo.tools.handlers.web"
+disallow_any_unimported = false
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "alfredo.tools.handlers.code_analysis"
+disallow_any_unimported = false
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
