@@ -1,0 +1,321 @@
+"""Graph nodes for the agentic scaffold."""
+
+from typing import Any
+
+try:
+    from langchain_core.language_models import BaseChatModel
+    from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
+    from langchain_core.tools import BaseTool
+    from langgraph.prebuilt import ToolNode
+
+    LANGGRAPH_AVAILABLE = True
+except ImportError:
+    LANGGRAPH_AVAILABLE = False
+    BaseChatModel = object  # type: ignore
+    BaseTool = object  # type: ignore
+    ToolNode = object  # type: ignore
+
+from alfredo.agentic.prompts import (
+    get_agent_system_prompt,
+    get_planning_prompt,
+    get_replan_prompt,
+    get_verification_prompt,
+)
+from alfredo.agentic.state import AgentState
+
+
+def create_planner_node(model: BaseChatModel) -> Any:
+    """Create the planner node that generates initial implementation plans.
+
+    Args:
+        model: The language model to use for planning
+
+    Returns:
+        Planner node function
+    """
+
+    def planner_node(state: AgentState) -> dict[str, Any]:
+        """Generate an implementation plan for the task.
+
+        Args:
+            state: Current agent state
+
+        Returns:
+            Updated state with plan
+        """
+        task = state["task"]
+        plan_iteration = state.get("plan_iteration", 0)
+
+        # Get planning prompt
+        planning_prompt = get_planning_prompt(task)
+
+        # Generate plan
+        messages = [SystemMessage(content=planning_prompt)]
+        response = model.invoke(messages)
+
+        plan = response.content if hasattr(response, "content") else str(response)
+
+        return {
+            "plan": plan,
+            "plan_iteration": plan_iteration + 1,
+            "messages": [HumanMessage(content=f"Task: {task}"), AIMessage(content=f"Plan created:\n\n{plan}")],
+        }
+
+    return planner_node
+
+
+def create_agent_node(model: BaseChatModel) -> Any:
+    """Create the agent node that performs reasoning and tool calling.
+
+    Args:
+        model: The language model with tools bound
+
+    Returns:
+        Agent node function
+    """
+
+    def agent_node(state: AgentState) -> dict[str, Any]:
+        """Perform reasoning and decide on next action.
+
+        Args:
+            state: Current agent state
+
+        Returns:
+            Updated state with new message
+        """
+        task = state["task"]
+        plan = state["plan"]
+        messages = list(state["messages"])
+
+        # Create system message with task and plan context
+        system_msg = SystemMessage(content=get_agent_system_prompt(task, plan))
+
+        # Invoke model with full context
+        full_messages = [system_msg] + messages
+        response = model.invoke(full_messages)
+
+        # Return updated messages
+        return {"messages": [response]}
+
+    return agent_node
+
+
+def create_tools_node(tools: list[BaseTool]) -> Any:
+    """Create the tools node that executes tool calls.
+
+    Args:
+        tools: List of available tools
+
+    Returns:
+        Tools node (using LangGraph's ToolNode)
+    """
+    return ToolNode(tools)
+
+
+def format_execution_trace(messages: list) -> str:
+    """Format message history into a readable execution trace.
+
+    Args:
+        messages: List of messages from the conversation
+
+    Returns:
+        Formatted trace string showing actions taken (full outputs, no truncation)
+    """
+    if not messages:
+        return "No actions recorded."
+
+    trace_lines = []
+    step_num = 0
+
+    for msg in messages:
+        # Skip system messages and initial plan messages
+        if isinstance(msg, SystemMessage):
+            continue
+
+        # Agent reasoning
+        if isinstance(msg, AIMessage):
+            content = msg.content if hasattr(msg, "content") else ""
+
+            # Check if it has tool calls
+            if hasattr(msg, "tool_calls") and msg.tool_calls:
+                for tool_call in msg.tool_calls:
+                    step_num += 1
+                    tool_name = tool_call.get("name", "unknown")
+                    args = tool_call.get("args", {})
+
+                    trace_lines.append(f"\n**Step {step_num}: Called tool `{tool_name}`**")
+                    if args:
+                        # Format args - show full values for verification
+                        args_str = ", ".join([f"{k}={v!r}" for k, v in args.items()])
+                        trace_lines.append(f"  Arguments: {args_str}")
+            elif (
+                content and not content.startswith("Plan created:") and not content.startswith("Creating improved plan")
+            ):
+                # Agent thinking/reasoning (not tool calls)
+                step_num += 1
+                trace_lines.append(f"\n**Step {step_num}: Agent reasoning**")
+                # Include full reasoning for verification
+                trace_lines.append(f"  {content}")
+
+        # Tool results
+        elif isinstance(msg, ToolMessage):
+            content = str(msg.content) if hasattr(msg, "content") else ""
+            # Show full results - verifier needs complete information
+            if "[TASK_COMPLETE]" in content:
+                trace_lines.append("  → Result: Task completion signal received")
+            else:
+                trace_lines.append(f"  → Result: {content}")
+
+        # Human messages (usually verification feedback)
+        elif isinstance(msg, HumanMessage):
+            content = str(msg.content) if hasattr(msg, "content") else ""
+            if not content.startswith("Task:") and not content.startswith("Verification result:"):
+                step_num += 1
+                trace_lines.append(f"\n**Step {step_num}: User input**")
+                trace_lines.append(f"  {content}")
+
+    if not trace_lines:
+        return "No significant actions recorded."
+
+    return "\n".join(trace_lines)
+
+
+def create_verifier_node(model: BaseChatModel) -> Any:
+    """Create the verifier node that checks if answers satisfy the task.
+
+    Args:
+        model: The language model to use for verification
+
+    Returns:
+        Verifier node function
+    """
+
+    def verifier_node(state: AgentState) -> dict[str, Any]:
+        """Verify if the final answer addresses the original task.
+
+        Args:
+            state: Current agent state
+
+        Returns:
+            Updated state with verification status
+        """
+        task = state["task"]
+
+        # Extract result from attempt_completion tool call
+        final_answer = extract_attempt_completion(state)
+
+        if not final_answer:
+            return {"is_verified": False, "final_answer": None}
+
+        # Format execution trace from message history
+        execution_trace = format_execution_trace(state["messages"])
+
+        # Get verification prompt with full execution trace
+        verification_prompt = get_verification_prompt(task, final_answer, execution_trace)
+
+        # Check if answer is satisfactory
+        messages = [SystemMessage(content=verification_prompt)]
+        response = model.invoke(messages)
+
+        response_text = response.content if hasattr(response, "content") else str(response)
+
+        # Parse verification result
+        is_verified = response_text.strip().startswith("VERIFIED:")
+
+        # Add verification message to history
+        verification_msg = HumanMessage(content=f"Verification result: {response_text}")
+
+        return {"is_verified": is_verified, "final_answer": final_answer, "messages": [verification_msg]}
+
+    return verifier_node
+
+
+def create_replan_node(model: BaseChatModel) -> Any:
+    """Create the replan node that generates new plans after verification failure.
+
+    Args:
+        model: The language model to use for replanning
+
+    Returns:
+        Replan node function
+    """
+
+    def replan_node(state: AgentState) -> dict[str, Any]:
+        """Generate a new plan based on verification feedback.
+
+        Args:
+            state: Current agent state
+
+        Returns:
+            Updated state with new plan
+        """
+        task = state["task"]
+        previous_plan = state["plan"]
+        plan_iteration = state["plan_iteration"]
+
+        # Extract verification feedback from last message
+        messages = state["messages"]
+        verification_feedback = "No specific feedback available."
+
+        if messages:
+            last_msg = messages[-1]
+            if hasattr(last_msg, "content"):
+                verification_feedback = str(last_msg.content)
+
+        # Get replanning prompt
+        replan_prompt = get_replan_prompt(task, previous_plan, verification_feedback)
+
+        # Generate new plan
+        planning_messages = [SystemMessage(content=replan_prompt)]
+        response = model.invoke(planning_messages)
+
+        new_plan = response.content if hasattr(response, "content") else str(response)
+
+        # Add replan message
+        replan_msg = AIMessage(content=f"Creating improved plan (iteration {plan_iteration + 1}):\n\n{new_plan}")
+
+        return {
+            "plan": new_plan,
+            "plan_iteration": plan_iteration + 1,
+            "messages": [replan_msg],
+            "final_answer": None,  # Reset final answer
+            "is_verified": False,  # Reset verification
+        }
+
+    return replan_node
+
+
+def extract_attempt_completion(state: AgentState) -> str:
+    """Extract the result from an attempt_completion tool call.
+
+    The attempt_completion tool always returns content starting with [TASK_COMPLETE],
+    so we simply search for any ToolMessage containing that marker.
+
+    Args:
+        state: Current agent state
+
+    Returns:
+        The extracted result or empty string
+    """
+    messages = state["messages"]
+    if not messages:
+        return ""
+
+    # Search backwards for a ToolMessage with [TASK_COMPLETE] marker
+    # The attempt_completion tool always outputs: "[TASK_COMPLETE]\n{result}"
+    for msg in reversed(messages):
+        if isinstance(msg, ToolMessage) and hasattr(msg, "content"):
+            content = str(msg.content)
+            if "[TASK_COMPLETE]" in content:
+                # Extract the result (everything after [TASK_COMPLETE]\n)
+                lines = content.split("\n", 1)
+                if len(lines) > 1:
+                    # Return everything after the marker, stripping "Final command executed:" if present
+                    result = lines[1]
+                    # If there's a "Final command executed:" line, keep everything before it
+                    if "\nFinal command executed:" in result:
+                        result = result.split("\nFinal command executed:")[0]
+                    return result.strip()
+                return ""
+
+    return ""

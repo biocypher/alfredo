@@ -102,29 +102,43 @@ _attempt_completion_spec = ToolSpec(
     id="attempt_completion",
     name="attempt_completion",
     description=(
-        "Request to signal completion of the task. "
-        "Use this when you believe you have successfully completed the user's request. "
-        "Provide a clear summary of what was accomplished."
+        "COMPLETE THE TASK - Call this when you have finished the task. "
+        "\n\n"
+        "IMPORTANT: This is the ONLY way to complete the task and end execution. "
+        "You MUST call this tool when: "
+        "(1) You have completed all required steps, "
+        "(2) The task requirements are satisfied, "
+        "(3) You have verified your work. "
+        "\n\n"
+        "If you don't call this tool, the task will never complete."
     ),
     variant=ModelFamily.GENERIC,
     parameters=[
         ToolParameter(
             name="result",
-            required=False,
+            required=True,
             instruction=(
-                "A summary of what was accomplished and any important details the user should know. "
-                "Be comprehensive but concise."
+                "A comprehensive summary explaining: "
+                "1. What you did to complete the task, "
+                "2. What files were created/modified, "
+                "3. Any commands you ran and their results, "
+                "4. Confirmation that the task is complete. "
+                "\n\n"
+                "Example: 'I successfully completed the task by: "
+                "1. Created file X with content Y, "
+                "2. Tested with command Z - output was correct, "
+                "3. Verified all requirements are met. "
+                "The task is now complete.'"
             ),
-            usage="Successfully created 3 files and ran all tests. Everything passed.",
+            usage="I created hello.py with a print statement, ran it successfully, and verified the output.",
         ),
         ToolParameter(
             name="command",
             required=False,
             instruction=(
-                "If you executed a command as part of completing the task, you can include it here "
-                "for the user's reference."
+                "If you executed a final command as part of completing the task, include it here for reference."
             ),
-            usage="npm test",
+            usage="python hello.py",
         ),
     ],
 )
