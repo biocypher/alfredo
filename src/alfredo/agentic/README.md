@@ -61,7 +61,7 @@ from alfredo.agentic.graph import run_agentic_task
 result = run_agentic_task(
     task="Create a Python script that prints Hello World",
     cwd=".",
-    model_name="gpt-4o-mini",
+    model_name="gpt-4.1-mini",
     verbose=True
 )
 
@@ -76,7 +76,7 @@ from alfredo.agentic import create_agentic_graph, AgentState
 # Create graph
 graph = create_agentic_graph(
     cwd=".",
-    model_name="gpt-4o-mini",
+    model_name="gpt-4.1-mini",
     max_context_tokens=100000
 )
 
@@ -113,7 +113,7 @@ The scaffold is model-agnostic and uses LangChain's `init_chat_model`:
 
 ```python
 # OpenAI (default)
-graph = create_agentic_graph(model_name="gpt-4o-mini")
+graph = create_agentic_graph(model_name="gpt-4.1-mini")
 
 # Anthropic
 graph = create_agentic_graph(model_name="anthropic/claude-3-5-sonnet-20241022")

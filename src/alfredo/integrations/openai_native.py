@@ -135,7 +135,7 @@ class OpenAIAgent:
         self,
         cwd: Optional[str] = ".",
         api_key: Optional[str] = None,
-        model: str = "gpt-4o-mini",
+        model: str = "gpt-4.1-mini",
         model_family: ModelFamily = ModelFamily.OPENAI,
     ) -> None:
         """Initialize the OpenAI agent.

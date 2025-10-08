@@ -13,7 +13,7 @@ def test_create_agentic_graph() -> None:
     # Requires API key to initialize the model
     graph = create_agentic_graph(
         cwd=".",
-        model_name="gpt-4o-mini",
+        model_name="gpt-4.1-mini",
         max_context_tokens=100000,
     )
 

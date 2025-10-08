@@ -93,10 +93,10 @@ def test_get_specific_tools_openai_format() -> None:
 def test_openai_agent_initialization(temp_dir: Path) -> None:
     """Test OpenAI agent initialization."""
     with patch("alfredo.integrations.openai_native.OpenAI") as mock_openai:
-        agent = OpenAIAgent(cwd=str(temp_dir), api_key="test-key", model="gpt-4o-mini")
+        agent = OpenAIAgent(cwd=str(temp_dir), api_key="test-key", model="gpt-4.1-mini")
 
         assert agent.cwd == str(temp_dir)
-        assert agent.model == "gpt-4o-mini"
+        assert agent.model == "gpt-4.1-mini"
         mock_openai.assert_called_once()
 
 

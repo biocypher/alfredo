@@ -3,6 +3,9 @@ docs/source
 # Local notes and documentation
 notes/
 
+#examples
+examples/
+
 # VSCode
 .vscode/
 
