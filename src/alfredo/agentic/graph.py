@@ -1,22 +1,11 @@
 """LangGraph state graph for the agentic scaffold."""
+# mypy: disable-error-code="no-any-unimported"
 
 from typing import Any, Literal, Optional
 
-try:
-    from langchain.chat_models import init_chat_model
-    from langchain_core.messages import AIMessage
-    from langchain_core.tools import StructuredTool, tool
-    from langgraph.graph import END, START, StateGraph
-
-    LANGGRAPH_AVAILABLE = True
-except ImportError:
-    LANGGRAPH_AVAILABLE = False
-    init_chat_model = None  # type: ignore
-    tool = None  # type: ignore
-    StructuredTool = object  # type: ignore
-    StateGraph = object  # type: ignore
-    START = "START"  # type: ignore
-    END = "END"  # type: ignore
+from langchain_core.messages import AIMessage
+from langchain_openai.chat_models import ChatOpenAI
+from langgraph.graph import END, START, StateGraph
 
 from alfredo.agentic.nodes import (
     create_agent_node,
@@ -25,7 +14,7 @@ from alfredo.agentic.nodes import (
     create_tools_node,
     create_verifier_node,
 )
-from alfredo.agentic.state import AgentState, check_langgraph_available
+from alfredo.agentic.state import AgentState
 from alfredo.integrations.langchain import create_all_langchain_tools
 
 # Note: We use the existing attempt_completion tool from alfredo.tools.handlers.workflow
@@ -124,14 +113,14 @@ def create_agentic_graph(
 
     Returns:
         Compiled LangGraph state graph
-
-    Raises:
-        ImportError: If LangGraph is not installed
     """
-    check_langgraph_available()
-
     # Initialize model
-    model = init_chat_model(model_name)
+    # model = init_chat_model(model_name)
+    model = ChatOpenAI(
+        base_url="https://api.z.ai/api/coding/paas/v4",
+        api_key="b88128bec8274c7a9b2a2eec6ca4e9d1.cfzUIJLksdgoqyxy",  # type: ignore[arg-type]
+        model="glm-4.6",
+    )
 
     # Get tools (includes attempt_completion from workflow handlers)
     if tools is None:
@@ -143,8 +132,8 @@ def create_agentic_graph(
 
     # Create nodes
     planner_node = create_planner_node(model)
-    agent_node = create_agent_node(model_with_tools)
-    tools_node = create_tools_node(tools)
+    agent_node = create_agent_node(model_with_tools)  # type: ignore[arg-type]
+    tools_node = create_tools_node(tools)  # type: ignore[arg-type]
     verifier_node = create_verifier_node(model)
     replan_node = create_replan_node(model)
 
@@ -220,8 +209,6 @@ def run_agentic_task(
     Returns:
         Final state dictionary with results
     """
-    check_langgraph_available()
-
     # Create graph
     graph = create_agentic_graph(
         cwd=cwd,
@@ -247,14 +234,13 @@ def run_agentic_task(
     # Run the graph
     try:
         final_state = graph.invoke(initial_state, config={"recursion_limit": recursion_limit})
-
-        if verbose:
-            print("\n✅ Task completed!")
-            print(f"\n📝 Final Answer:\n{final_state.get('final_answer', 'No answer provided')}")
-
-        return final_state
-
     except Exception as e:
         if verbose:
             print(f"\n❌ Error during execution: {e}")
         raise
+    else:
+        if verbose:
+            print("\n✅ Task completed!")
+            print(f"\n📝 Final Answer:\n{final_state.get('final_answer', 'No answer provided')}")
+
+        return final_state  # type: ignore[no-any-return]

@@ -4,15 +4,7 @@ import os
 
 import pytest
 
-try:
-    from langchain_core.messages import AIMessage, HumanMessage
 
-    LANGGRAPH_AVAILABLE = True
-except ImportError:
-    LANGGRAPH_AVAILABLE = False
-
-
-@pytest.mark.skipif(not LANGGRAPH_AVAILABLE, reason="LangGraph not installed")
 @pytest.mark.skipif(not os.getenv("OPENAI_API_KEY"), reason="OPENAI_API_KEY not set")
 def test_create_agentic_graph() -> None:
     """Test that the graph can be created without errors."""
@@ -28,7 +20,6 @@ def test_create_agentic_graph() -> None:
     assert graph is not None
 
 
-@pytest.mark.skipif(not LANGGRAPH_AVAILABLE, reason="LangGraph not installed")
 @pytest.mark.skipif(not os.getenv("OPENAI_API_KEY"), reason="OPENAI_API_KEY not set")
 def test_graph_has_expected_nodes() -> None:
     """Test that the graph contains all expected nodes."""
@@ -43,12 +34,11 @@ def test_graph_has_expected_nodes() -> None:
     expected_nodes = {"planner", "agent", "tools", "verifier", "replan"}
 
     # Node keys include special START and END nodes
-    node_names = {name for name in nodes.keys() if not name.startswith("__")}
+    node_names = {name for name in nodes if not name.startswith("__")}
 
     assert expected_nodes.issubset(node_names), f"Missing nodes: {expected_nodes - node_names}"
 
 
-@pytest.mark.skipif(not LANGGRAPH_AVAILABLE, reason="LangGraph not installed")
 @pytest.mark.skipif(not os.getenv("OPENAI_API_KEY"), reason="OPENAI_API_KEY not set")
 def test_graph_edges() -> None:
     """Test that the graph has expected edge structure."""
@@ -67,7 +57,6 @@ def test_graph_edges() -> None:
     assert len(edges) > 0, "Graph should have edges"
 
 
-@pytest.mark.skipif(not LANGGRAPH_AVAILABLE, reason="LangGraph not installed")
 def test_should_continue_function() -> None:
     """Test the should_continue routing function."""
     from alfredo.agentic.graph import should_continue
@@ -112,7 +101,6 @@ def test_should_continue_function() -> None:
     assert result == "tools"
 
 
-@pytest.mark.skipif(not LANGGRAPH_AVAILABLE, reason="LangGraph not installed")
 def test_verification_router() -> None:
     """Test the verification_router function."""
     from alfredo.agentic.graph import verification_router
@@ -145,7 +133,6 @@ def test_verification_router() -> None:
     assert result == "replan"
 
 
-@pytest.mark.skipif(not LANGGRAPH_AVAILABLE, reason="LangGraph not installed")
 def test_format_execution_trace() -> None:
     """Test formatting execution trace from messages."""
     from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
@@ -181,7 +168,6 @@ def test_format_execution_trace() -> None:
     assert "Task completion signal" in trace
 
 
-@pytest.mark.skipif(not LANGGRAPH_AVAILABLE, reason="LangGraph not installed")
 def test_extract_attempt_completion() -> None:
     """Test extracting result from attempt_completion tool call.
 

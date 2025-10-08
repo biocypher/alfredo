@@ -25,7 +25,13 @@ repos:
     rev: "v1.14.1"
     hooks:
       - id: mypy
-        additional_dependencies: [types-requests, types-beautifulsoup4]
+        additional_dependencies:
+          - types-requests
+          - types-beautifulsoup4
+          - langchain-core>=0.3.78
+          - langgraph>=0.6.8
+          - langchain-openai>=0.3.35
+          - typing-extensions
 
   - repo: https://github.com/jendrikseipp/vulture
     rev: "v2.14"

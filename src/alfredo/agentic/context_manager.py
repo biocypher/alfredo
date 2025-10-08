@@ -1,17 +1,9 @@
 """Context management for handling token limits in the agentic scaffold."""
+# mypy: disable-error-code="no-any-unimported"
 
 from collections.abc import Sequence
 
-try:
-    from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
-
-    LANGCHAIN_AVAILABLE = True
-except ImportError:
-    LANGCHAIN_AVAILABLE = False
-    BaseMessage = object  # type: ignore
-    AIMessage = object  # type: ignore
-    HumanMessage = object  # type: ignore
-    SystemMessage = object  # type: ignore
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 
 
 class ContextManager:
@@ -117,7 +109,7 @@ You are now continuing from this point. Use the summary above as context for you
         summary_msg = self.create_summary_message(summary)
 
         # Return summary + recent messages
-        return [summary_msg] + recent_messages
+        return [summary_msg, *recent_messages]
 
     def get_context_info(self, messages: Sequence[BaseMessage], task: str = "", plan: str = "") -> str:
         """Get a string representation of current context usage.

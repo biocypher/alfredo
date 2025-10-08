@@ -1,19 +1,13 @@
 """Graph nodes for the agentic scaffold."""
+# mypy: disable-error-code="no-any-unimported"
 
+from collections.abc import Sequence
 from typing import Any
 
-try:
-    from langchain_core.language_models import BaseChatModel
-    from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
-    from langchain_core.tools import BaseTool
-    from langgraph.prebuilt import ToolNode
-
-    LANGGRAPH_AVAILABLE = True
-except ImportError:
-    LANGGRAPH_AVAILABLE = False
-    BaseChatModel = object  # type: ignore
-    BaseTool = object  # type: ignore
-    ToolNode = object  # type: ignore
+from langchain_core.language_models import BaseChatModel
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
+from langchain_core.tools import BaseTool
+from langgraph.prebuilt import ToolNode
 
 from alfredo.agentic.prompts import (
     get_agent_system_prompt,
@@ -50,7 +44,7 @@ def create_planner_node(model: BaseChatModel) -> Any:
         planning_prompt = get_planning_prompt(task)
 
         # Generate plan
-        messages = [SystemMessage(content=planning_prompt)]
+        messages = [HumanMessage(content=planning_prompt)]
         response = model.invoke(messages)
 
         plan = response.content if hasattr(response, "content") else str(response)
@@ -91,7 +85,7 @@ def create_agent_node(model: BaseChatModel) -> Any:
         system_msg = SystemMessage(content=get_agent_system_prompt(task, plan))
 
         # Invoke model with full context
-        full_messages = [system_msg] + messages
+        full_messages = [system_msg, *messages]
         response = model.invoke(full_messages)
 
         # Return updated messages
@@ -112,11 +106,11 @@ def create_tools_node(tools: list[BaseTool]) -> Any:
     return ToolNode(tools)
 
 
-def format_execution_trace(messages: list) -> str:
+def format_execution_trace(messages: Sequence) -> str:  # noqa: C901
     """Format message history into a readable execution trace.
 
     Args:
-        messages: List of messages from the conversation
+        messages: Sequence of messages from the conversation
 
     Returns:
         Formatted trace string showing actions taken (full outputs, no truncation)
@@ -134,7 +128,7 @@ def format_execution_trace(messages: list) -> str:
 
         # Agent reasoning
         if isinstance(msg, AIMessage):
-            content = msg.content if hasattr(msg, "content") else ""
+            content = str(msg.content) if hasattr(msg, "content") else ""
 
             # Check if it has tool calls
             if hasattr(msg, "tool_calls") and msg.tool_calls:
@@ -214,10 +208,10 @@ def create_verifier_node(model: BaseChatModel) -> Any:
         verification_prompt = get_verification_prompt(task, final_answer, execution_trace)
 
         # Check if answer is satisfactory
-        messages = [SystemMessage(content=verification_prompt)]
+        messages = [HumanMessage(content=verification_prompt)]
         response = model.invoke(messages)
 
-        response_text = response.content if hasattr(response, "content") else str(response)
+        response_text = str(response.content) if hasattr(response, "content") else str(response)
 
         # Parse verification result
         is_verified = response_text.strip().startswith("VERIFIED:")
@@ -266,7 +260,7 @@ def create_replan_node(model: BaseChatModel) -> Any:
         replan_prompt = get_replan_prompt(task, previous_plan, verification_feedback)
 
         # Generate new plan
-        planning_messages = [SystemMessage(content=replan_prompt)]
+        planning_messages = [HumanMessage(content=replan_prompt)]
         response = model.invoke(planning_messages)
 
         new_plan = response.content if hasattr(response, "content") else str(response)

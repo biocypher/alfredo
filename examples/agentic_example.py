@@ -26,15 +26,13 @@ load_dotenv()
 
 # Check if LangGraph is available
 try:
-    from langchain_core.messages import HumanMessage
+    from alfredo.agentic.graph import run_agentic_task
 
     LANGGRAPH_AVAILABLE = True
 except ImportError:
     LANGGRAPH_AVAILABLE = False
     print("LangGraph is not installed. Install with: uv add alfredo[agentic]")
     exit(1)
-
-from alfredo.agentic.graph import run_agentic_task
 
 print("=" * 80)
 print("AGENTIC SCAFFOLD EXAMPLE")
@@ -56,7 +54,7 @@ if not os.getenv("OPENAI_API_KEY"):
     print("\n   Skipping live examples...\n")
 else:
     # Run a simple task
-    task = """Create a Python script called 'hello_world.py' that prints "Hello, Agentic World!"
+    task = """Create a Python script called 'pi.py' that estimates pi using the Monte Carlo method"
     and includes a docstring explaining what it does."""
 
     print(f"Task: {task}\n")
@@ -65,7 +63,7 @@ else:
     result = run_agentic_task(
         task=task,
         cwd=str(Path.cwd()),
-        model_name="gpt-4.1-mini",  # Using GPT-4o-mini as default
+        # model_name="gpt-4.1-mini",  # Using GPT-4o-mini as default
         max_context_tokens=100000,
         verbose=True,
     )

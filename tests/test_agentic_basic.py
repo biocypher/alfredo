@@ -1,18 +1,6 @@
 """Basic tests for the agentic scaffold."""
 
-import pytest
 
-try:
-    from langchain_core.messages import AIMessage, HumanMessage
-
-    LANGGRAPH_AVAILABLE = True
-except ImportError:
-    LANGGRAPH_AVAILABLE = False
-
-from alfredo.agentic.state import check_langgraph_available
-
-
-@pytest.mark.skipif(not LANGGRAPH_AVAILABLE, reason="LangGraph not installed")
 def test_imports() -> None:
     """Test that agentic modules can be imported."""
     from alfredo.agentic import AgentState, create_agentic_graph
@@ -29,7 +17,6 @@ def test_imports() -> None:
     assert get_planning_prompt is not None
 
 
-@pytest.mark.skipif(not LANGGRAPH_AVAILABLE, reason="LangGraph not installed")
 def test_agent_state() -> None:
     """Test AgentState structure."""
     from alfredo.agentic.state import AgentState
@@ -50,9 +37,10 @@ def test_agent_state() -> None:
     assert state["is_verified"] is False
 
 
-@pytest.mark.skipif(not LANGGRAPH_AVAILABLE, reason="LangGraph not installed")
 def test_context_manager() -> None:
     """Test context manager token estimation."""
+    from langchain_core.messages import HumanMessage
+
     from alfredo.agentic.context_manager import ContextManager
 
     cm = ContextManager(max_tokens=1000)
@@ -67,7 +55,6 @@ def test_context_manager() -> None:
     assert not cm.should_summarize(messages)
 
 
-@pytest.mark.skipif(not LANGGRAPH_AVAILABLE, reason="LangGraph not installed")
 def test_prompts() -> None:
     """Test prompt generation."""
     from alfredo.agentic.prompts import (
@@ -92,7 +79,6 @@ def test_prompts() -> None:
     assert "VERIFIED" in verification_prompt
 
 
-@pytest.mark.skipif(not LANGGRAPH_AVAILABLE, reason="LangGraph not installed")
 def test_attempt_completion_tool() -> None:
     """Test that attempt_completion tool is available from workflow handlers."""
     from alfredo.integrations.langchain import create_all_langchain_tools
@@ -108,7 +94,7 @@ def test_attempt_completion_tool() -> None:
             break
 
     assert attempt_completion_tool is not None, "attempt_completion tool should be in tools"
-    assert "result" in str(attempt_completion_tool.args_schema.schema())
+    assert "result" in str(attempt_completion_tool.args_schema.model_json_schema())  # type: ignore[union-attr]
 
     # Test invocation
     result = attempt_completion_tool.invoke({"result": "Task completed successfully"})
@@ -116,12 +102,10 @@ def test_attempt_completion_tool() -> None:
     assert "Task completed successfully" in result
 
 
-def test_check_langgraph_available() -> None:
-    """Test LangGraph availability check."""
-    if LANGGRAPH_AVAILABLE:
-        # Should not raise
-        check_langgraph_available()
-    else:
-        # Should raise ImportError
-        with pytest.raises(ImportError):
-            check_langgraph_available()
+def test_langgraph_imports() -> None:
+    """Test that LangGraph imports work (required dependency)."""
+    from langchain_core.messages import BaseMessage
+    from langgraph.graph import StateGraph
+
+    assert BaseMessage is not None
+    assert StateGraph is not None

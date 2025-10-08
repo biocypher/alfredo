@@ -1,17 +1,18 @@
 """Minimal test to diagnose the recursion issue."""
 
 import os
+import sys
 
 from dotenv import load_dotenv
+
+from alfredo.agentic.graph import create_agentic_graph
+from alfredo.agentic.state import AgentState
 
 load_dotenv()
 
 if not os.getenv("OPENAI_API_KEY"):
     print("❌ OPENAI_API_KEY not set")
-    exit(1)
-
-from alfredo.agentic.graph import create_agentic_graph
-from alfredo.agentic.state import AgentState
+    sys.exit(1)
 
 print("Creating graph...")
 graph = create_agentic_graph(model_name="gpt-4o-mini", cwd=".")
@@ -35,7 +36,7 @@ node_sequence = []
 try:
     for step in graph.stream(initial_state):
         step_count += 1
-        for node_name in step.keys():
+        for node_name in step:
             node_sequence.append(node_name)
             print(f"Step {step_count}: {node_name}")
 

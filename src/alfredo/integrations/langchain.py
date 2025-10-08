@@ -13,8 +13,8 @@ try:
     LANGCHAIN_AVAILABLE = True
 except ImportError:
     LANGCHAIN_AVAILABLE = False
-    StructuredTool = object
-    BaseModel = object
+    StructuredTool = object  # type: ignore[assignment,misc]
+    BaseModel = object  # type: ignore[assignment,misc]
 
 from alfredo.tools.base import ToolResult
 from alfredo.tools.registry import registry
