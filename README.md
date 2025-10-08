@@ -70,11 +70,11 @@ print(agent.results["final_answer"])
 Convert Alfredo tools to LangChain format for custom agent implementations:
 
 ```python
-from alfredo.integrations.langchain import create_all_langchain_tools
+from alfredo.integrations.langchain import create_langchain_tools
 from langchain_anthropic import ChatAnthropic
 
 # Convert Alfredo tools to LangChain format
-tools = create_all_langchain_tools(cwd=".")
+tools = create_langchain_tools(cwd=".")
 
 # Use with any LangChain agent
 model = ChatAnthropic(model="claude-3-5-sonnet-20241022")

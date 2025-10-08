@@ -15,7 +15,7 @@ from alfredo.agentic.nodes import (
     create_verifier_node,
 )
 from alfredo.agentic.state import AgentState
-from alfredo.integrations.langchain import create_all_langchain_tools
+from alfredo.integrations.langchain import create_langchain_tools
 
 # Note: We use the existing attempt_completion tool from alfredo.tools.handlers.workflow
 # No need to create a duplicate tool here
@@ -127,7 +127,7 @@ def create_agentic_graph(
     # Get tools (includes attempt_completion from workflow handlers)
     if tools is None:
         # Get all Alfredo tools (includes attempt_completion)
-        tools = create_all_langchain_tools(cwd=cwd)
+        tools = create_langchain_tools(cwd=cwd)
 
     # Bind tools to model for agent node
     model_with_tools = model.bind_tools(tools)

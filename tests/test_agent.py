@@ -81,10 +81,10 @@ def test_agent_display_trace_without_run() -> None:
 @pytest.mark.skipif(not LANGGRAPH_AVAILABLE, reason="LangGraph not installed")
 def test_agent_custom_tools() -> None:
     """Test that agent accepts custom tools list."""
-    from alfredo.integrations.langchain import create_all_langchain_tools
+    from alfredo.integrations.langchain import create_langchain_tools
 
     # Create a limited toolset
-    tools = create_all_langchain_tools(cwd=".", tool_ids=["list_files", "read_file"])
+    tools = create_langchain_tools(cwd=".", tool_ids=["list_files", "read_file"])
 
     agent = Agent(cwd=".", tools=tools, verbose=False)
     assert agent.tools is not None

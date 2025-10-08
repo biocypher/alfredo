@@ -75,10 +75,10 @@ uv run mkdocs serve
 ### Convert Tools to LangChain
 
 ```python
-from alfredo.integrations.langchain import create_all_langchain_tools
+from alfredo.integrations.langchain import create_langchain_tools
 
 # Get all tools as LangChain StructuredTools
-tools = create_all_langchain_tools(cwd="/path/to/workspace")
+tools = create_langchain_tools(cwd="/path/to/workspace")
 
 # Use with LangChain agents
 from langchain_anthropic import ChatAnthropic
@@ -199,11 +199,11 @@ agent.display_trace()
 
 ```python
 from alfredo import Agent
-from alfredo.integrations.langchain import create_all_langchain_tools
+from alfredo.integrations.langchain import create_langchain_tools
 from alfredo.integrations.mcp import load_mcp_tools_sync
 
 # Load only specific Alfredo tools
-alfredo_tools = create_all_langchain_tools(
+alfredo_tools = create_langchain_tools(
     cwd=".",
     tool_ids=["read_file", "write_file", "list_files", "attempt_completion"]
 )

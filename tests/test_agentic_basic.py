@@ -81,10 +81,10 @@ def test_prompts() -> None:
 
 def test_attempt_completion_tool() -> None:
     """Test that attempt_completion tool is available from workflow handlers."""
-    from alfredo.integrations.langchain import create_all_langchain_tools
+    from alfredo.integrations.langchain import create_langchain_tools
 
     # Get all tools (includes attempt_completion)
-    tools = create_all_langchain_tools(cwd=".")
+    tools = create_langchain_tools(cwd=".")
 
     # Find the attempt_completion tool
     attempt_completion_tool = None

@@ -51,7 +51,7 @@ except ImportError:
     MCP_AVAILABLE = False
     MultiServerMCPClient = object
 
-from alfredo.integrations.langchain import create_all_langchain_tools
+from alfredo.integrations.langchain import create_langchain_tools
 from alfredo.tools.specs import ModelFamily
 
 
@@ -220,7 +220,7 @@ async def load_combined_tools(
         ```
     """
     # Load Alfredo tools (synchronous)
-    alfredo_tools = create_all_langchain_tools(
+    alfredo_tools = create_langchain_tools(
         cwd=cwd,
         model_family=model_family,
         tool_ids=alfredo_tool_ids,

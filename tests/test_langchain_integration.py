@@ -17,8 +17,8 @@ pytestmark = pytest.mark.skipif(not LANGCHAIN_AVAILABLE, reason="LangChain not i
 
 if LANGCHAIN_AVAILABLE:
     from alfredo.integrations.langchain import (
-        create_all_langchain_tools,
         create_langchain_tool,
+        create_langchain_tools,
         create_pydantic_model_from_spec,
     )
     from alfredo.tools.registry import registry
@@ -49,13 +49,13 @@ def test_create_langchain_tool() -> None:
     assert tool.name == "read_file"
     assert "read" in tool.description.lower()
     assert hasattr(tool, "args_schema")
-    assert "path" in tool.args_schema.model_fields
+    assert "path" in tool.args_schema.model_fields  # type: ignore[union-attr]
 
 
 @pytest.mark.skipif(not LANGCHAIN_AVAILABLE, reason="LangChain not installed")
-def test_create_all_langchain_tools() -> None:
+def test_create_langchain_tools() -> None:
     """Test creating all LangChain tools."""
-    tools = create_all_langchain_tools()
+    tools = create_langchain_tools()
 
     assert len(tools) > 0
     assert all(hasattr(tool, "name") for tool in tools)
@@ -139,7 +139,7 @@ def test_langchain_tool_error_handling() -> None:
 def test_specific_tools_conversion() -> None:
     """Test converting specific tools only."""
     tool_ids = ["read_file", "write_to_file"]
-    tools = create_all_langchain_tools(tool_ids=tool_ids)
+    tools = create_langchain_tools(tool_ids=tool_ids)
 
     assert len(tools) == 2
     tool_names = [tool.name for tool in tools]
@@ -200,8 +200,8 @@ def test_langchain_web_fetch() -> None:
 
 @pytest.mark.skipif(not LANGCHAIN_AVAILABLE, reason="LangChain not installed")
 def test_new_tools_in_all_tools_list() -> None:
-    """Test that new tools are included in create_all_langchain_tools."""
-    tools = create_all_langchain_tools()
+    """Test that new tools are included in create_langchain_tools."""
+    tools = create_langchain_tools()
 
     tool_names = [tool.name for tool in tools]
 

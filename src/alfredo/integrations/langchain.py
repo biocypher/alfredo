@@ -126,12 +126,12 @@ def create_langchain_tool(
     return lc_tool
 
 
-def create_all_langchain_tools(
+def create_langchain_tools(
     cwd: Optional[str] = None,
     model_family: ModelFamily = ModelFamily.GENERIC,
     tool_ids: Optional[list[str]] = None,
 ) -> list[StructuredTool]:
-    """Create LangChain tools for all registered Alfredo tools.
+    """Create LangChain tools from Alfredo tools.
 
     Args:
         cwd: Working directory for file operations
