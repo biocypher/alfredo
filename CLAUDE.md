@@ -68,19 +68,9 @@ make test
 uv run mkdocs serve
 ```
 
-## LangChain Integration
+## LangChain/LangGraph Integration
 
-Alfredo tools are fully compatible with LangChain and LangGraph! See `LANGCHAIN_INTEGRATION.md` for complete documentation.
-
-### Quick Start
-
-```bash
-# Install with LangChain support
-uv add alfredo[langchain]
-
-# Or add langchain-core separately
-uv add langchain-core
-```
+**IMPORTANT**: LangGraph is now a **required dependency** (not optional). The project includes a full agentic scaffold.
 
 ### Convert Tools to LangChain
 
@@ -96,66 +86,164 @@ model = ChatAnthropic(model="claude-3-5-sonnet-20241022")
 model_with_tools = model.bind_tools(tools)
 ```
 
-### Run Examples
+### Run Agentic Scaffold
+
+```python
+from alfredo.agentic.graph import run_agentic_task
+
+# Run a task with plan-verify-replan loop
+result = run_agentic_task(
+    task="Create a hello world Python script",
+    cwd=".",
+    model_name="gpt-4o-mini",
+    verbose=True,
+    recursion_limit=50
+)
+```
+
+### Examples
 
 ```bash
-# Test LangChain integration
-uv run pytest tests/test_langchain_integration.py -v
-
-# Run example
+# Run basic LangChain example
 uv run python examples/langchain_integration.py
+
+# Run agentic scaffold example
+uv run python examples/agentic_example.py
+
+# Test agentic scaffold
+uv run pytest tests/test_agentic_graph.py -v
 ```
 
 ## Architecture
 
+Alfredo provides a layered architecture with multiple usage patterns to fit different use cases.
+
+## Usage Patterns
+
+### Primary Usage: Agentic Scaffold (Recommended)
+
+**For most users, the LangGraph agentic scaffold is the recommended approach.** It provides:
+- Automatic planning and replanning
+- Verification of task completion
+- Sophisticated tool orchestration
+- Support for any LLM provider (OpenAI, Anthropic, etc.)
+
+```python
+from alfredo.agentic.graph import run_agentic_task
+
+result = run_agentic_task(
+    task="Create a hello world Python script",
+    cwd=".",
+    model_name="gpt-4o-mini",
+    verbose=True
+)
+```
+
+The agentic scaffold uses LangChain to automatically convert Alfredo tools to the native format of any LLM provider (OpenAI's function calling, Anthropic's tool use, etc.).
+
+### Alternative Usage Patterns
+
+For specialized use cases or direct control, Alfredo provides alternative execution modes:
+
+**1. Native OpenAI Agent** - Direct OpenAI API integration without LangChain:
+
+```python
+from alfredo import OpenAIAgent
+
+agent = OpenAIAgent(cwd=".", model="gpt-4o-mini")
+result = agent.run("Read the file config.json")
+```
+
+Use this when:
+- You want direct OpenAI API control without LangChain
+- You're building custom tool calling loops
+- You need minimal dependencies
+
+**2. XML-Based Agent** - Simple XML parsing for text-based tool invocations:
+
+```python
+from alfredo import Agent
+
+agent = Agent(cwd=".")
+prompt = agent.get_system_prompt()  # Contains XML tool definitions
+# Send prompt to LLM, get XML response
+result = agent.execute_from_text(llm_response)
+```
+
+Use this when:
+- You need a simple, minimal execution model
+- You're using Anthropic's XML-style prompts directly
+- You're building custom agent loops
+
+## Core Architecture
+
 ### Tools System
 
-The core of Alfredo is a modular tool system that allows AI agents to:
+The core tool system allows AI agents to interact with the environment through a modular handler architecture:
 
-1. **File Operations** (`src/alfredo/tools/handlers/file_ops.py`)
-   - Read files
-   - Write/create files
-   - Apply diff-based edits with SEARCH/REPLACE blocks
+**Tool Categories:**
+- **File Operations** (`file_ops.py`) - Read, write, diff-based edits
+- **Command Execution** (`command.py`) - Shell commands with timeout control
+- **File Discovery** (`discovery.py`) - List directories, search with regex
+- **Code Analysis** (`code_analysis.py`) - List code definitions using tree-sitter
+- **Web Tools** (`web.py`) - Fetch and convert web content to markdown
+- **Workflow Control** (`workflow.py`) - Ask questions, signal completion
 
-2. **Command Execution** (`src/alfredo/tools/handlers/command.py`)
-   - Execute shell commands with timeout control
-   - Capture stdout/stderr
-
-3. **File Discovery** (`src/alfredo/tools/handlers/discovery.py`)
-   - List directory contents (recursive option)
-   - Search files with regex patterns
-
-4. **Workflow Control** (`src/alfredo/tools/handlers/workflow.py`)
-   - Ask follow-up questions
-   - Signal task completion
-
-### Core Components
-
+**Key Components:**
 ```
 src/alfredo/
-├── agent.py              # Main Agent class - orchestrates tool execution
+├── agent.py              # XML-based Agent class
 ├── tools/
 │   ├── specs.py          # Tool specifications (ToolSpec, ToolParameter)
 │   ├── registry.py       # Tool registry (singleton pattern)
-│   ├── base.py           # Base handler classes
+│   ├── base.py           # BaseToolHandler class
 │   └── handlers/         # Tool implementations
-│       ├── file_ops.py   # File read/write/edit
-│       ├── command.py    # Command execution
-│       ├── discovery.py  # List/search files
-│       └── workflow.py   # Ask/completion
 ├── prompts/
 │   └── builder.py        # System prompt generation
 ├── integrations/
-│   └── langchain.py      # LangChain/LangGraph integration
+│   ├── langchain.py      # LangChain/LangGraph integration
+│   └── openai_native.py  # Native OpenAI API integration
+└── agentic/              # LangGraph-based agentic scaffold
 ```
 
-### Key Design Patterns
+**Design Patterns:**
+- **Tool Registry**: Singleton managing tool specs and handlers
+- **Specification-based**: Tools defined via `ToolSpec` with parameters
+- **Handler Pattern**: Each tool has a handler class implementing `execute()`
+- **Model Family Variants**: Support for Anthropic/OpenAI/Gemini-specific prompts
+- **Format Adapters**: XML format for text-based agents, native OpenAI/Anthropic formats via LangChain
 
-1. **Tool Registry**: Singleton pattern for managing tool specifications and handlers
-2. **Specification-based**: Tools are defined via `ToolSpec` objects with parameters and descriptions
-3. **Handler Pattern**: Each tool has a handler class that implements execution logic
-4. **Model Family Variants**: Support for different LLM-specific tool definitions
-5. **XML Format**: Standard tool invocation format compatible with Claude and other models
+### Agentic Scaffold Implementation
+
+The agentic scaffold provides sophisticated LangGraph-based execution with plan-verify-replan loop:
+
+**Graph Structure:**
+```
+START → planner → agent ⇄ tools → verifier
+                   ↑              ↓
+                   └── replan ←───┘
+```
+
+**Nodes:**
+- `planner` - Creates initial implementation plan
+- `agent` - Performs reasoning and calls tools
+- `tools` - Executes tool calls (uses LangGraph's ToolNode)
+- `verifier` - Checks if task is complete and satisfactory
+- `replan` - Generates improved plan after verification failure
+
+**State Management (`AgentState`):**
+- `messages` - Conversation history (LangChain messages)
+- `task` - Original user task
+- `plan` - Current implementation plan
+- `plan_iteration` - Plan version number
+- `final_answer` - Result from `attempt_completion` tool
+- `is_verified` - Whether verifier approved the answer
+
+**Key Files:**
+- `agentic/graph.py` - Graph construction and routing logic
+- `agentic/nodes.py` - Node implementations
+- `agentic/state.py` - State type definitions
+- `agentic/prompts.py` - System prompts for each node
 
 ## Adding New Tools
 
@@ -243,36 +331,25 @@ uv run pytest -v -s
 
 ## Examples
 
-See `examples/basic_usage.py` for a complete example of using the Agent class.
-
-Run the example:
-
 ```bash
-cd examples
-uv run python basic_usage.py
-```
+# Basic agent usage (XML-based tool execution)
+uv run python examples/basic_usage.py
 
-## Documentation
+# LangChain integration
+uv run python examples/langchain_integration.py
 
-Full tool documentation is in `TOOLS_README.md`.
+# Agentic scaffold (plan-verify-replan)
+uv run python examples/agentic_example.py
 
-Build and serve docs:
-
-```bash
-uv run mkdocs serve
+# Web fetch examples
+uv run python examples/web_fetch_simple.py
 ```
 
 ## Common Tasks
 
-### Run example
+### Run all quality checks
 ```bash
-uv run python examples/basic_usage.py
-```
-
-### Check code quality
-```bash
-uv run ruff check src
-uv run mypy src
+make check
 ```
 
 ### Format code
@@ -283,4 +360,9 @@ uv run ruff format src tests
 ### Update dependencies
 ```bash
 uv lock --upgrade
+```
+
+### Build package
+```bash
+make build
 ```
