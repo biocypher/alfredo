@@ -5,12 +5,11 @@ description = "Python harness for  AI agents"
 authors = [{ name = "Francesco Carli", email = "francesco.carli94@gmail.com" }]
 readme = "README.md"
 keywords = ['python']
-requires-python = ">=3.9,<4.0"
+requires-python = ">=3.10,<4.0"
 classifiers = [
     "Intended Audience :: Developers",
     "Programming Language :: Python",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
@@ -23,6 +22,7 @@ dependencies = [
     "jupyter>=1.1.1",
     "langchain>=0.3.27",
     "langchain-core>=0.3.78",
+    "langchain-mcp-adapters>=0.1.11",
     "langchain-openai>=0.3.35",
     "langgraph>=0.6.8",
     "python-dotenv>=1.1.1",
@@ -83,6 +83,12 @@ show_error_codes = true
 
 [[tool.mypy.overrides]]
 module = "alfredo.integrations.langchain"
+disallow_any_unimported = false
+warn_return_any = false
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "alfredo.integrations.mcp"
 disallow_any_unimported = false
 warn_return_any = false
 ignore_missing_imports = true

@@ -6,7 +6,6 @@ from typing import Any
 
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
-from langchain_core.tools import BaseTool
 from langgraph.prebuilt import ToolNode
 
 from alfredo.agentic.prompts import (
@@ -94,11 +93,11 @@ def create_agent_node(model: BaseChatModel) -> Any:
     return agent_node
 
 
-def create_tools_node(tools: list[BaseTool]) -> Any:
+def create_tools_node(tools: Sequence[Any]) -> Any:
     """Create the tools node that executes tool calls.
 
     Args:
-        tools: List of available tools
+        tools: Sequence of available tools (BaseTool or compatible)
 
     Returns:
         Tools node (using LangGraph's ToolNode)

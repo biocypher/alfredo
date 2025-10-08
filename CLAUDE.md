@@ -114,6 +114,171 @@ uv run python examples/agentic_example.py
 uv run pytest tests/test_agentic_graph.py -v
 ```
 
+## MCP (Model Context Protocol) Integration
+
+Alfredo supports loading and using MCP-compatible tools alongside native Alfredo tools. This allows you to extend the agent's capabilities with any MCP server.
+
+### Installation
+
+```bash
+# Add MCP adapters package
+uv add langchain-mcp-adapters
+```
+
+### Loading MCP Tools
+
+```python
+from alfredo.integrations.mcp import load_mcp_tools_sync
+
+# Configure MCP servers
+server_configs = {
+    "filesystem": {
+        "command": "npx",
+        "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
+        "transport": "stdio"
+    }
+}
+
+# Load MCP tools
+mcp_tools = load_mcp_tools_sync(server_configs)
+```
+
+### Combining Alfredo + MCP Tools
+
+```python
+from alfredo.integrations.mcp import load_combined_tools_sync
+
+# Load both Alfredo and MCP tools in one call
+tools = load_combined_tools_sync(
+    cwd=".",
+    mcp_server_configs=server_configs
+)
+
+# Use with agentic scaffold
+from alfredo.agentic.graph import run_agentic_task
+
+result = run_agentic_task(
+    task="Your task here",
+    cwd=".",
+    model_name="gpt-4o-mini",
+    tools=tools,  # Pass custom toolset
+    verbose=True
+)
+```
+
+### Custom Tool Selection
+
+```python
+from alfredo.integrations.langchain import create_all_langchain_tools
+from alfredo.integrations.mcp import load_mcp_tools_sync
+
+# Load only specific Alfredo tools
+alfredo_tools = create_all_langchain_tools(
+    cwd=".",
+    tool_ids=["read_file", "write_file", "list_files"]
+)
+
+# Load MCP tools
+mcp_tools = load_mcp_tools_sync(server_configs)
+
+# Combine manually
+custom_tools = alfredo_tools + mcp_tools
+
+# Use with run_agentic_task
+result = run_agentic_task(
+    task="Your task",
+    tools=custom_tools
+)
+```
+
+### Async Usage
+
+```python
+import asyncio
+from alfredo.integrations.mcp import load_combined_tools
+
+async def main():
+    tools = await load_combined_tools(
+        cwd=".",
+        mcp_server_configs=server_configs
+    )
+
+    # Use tools with run_agentic_task
+    result = run_agentic_task(task="...", tools=tools)
+
+asyncio.run(main())
+```
+
+### Popular MCP Servers
+
+Install MCP servers via npm:
+
+```bash
+# Filesystem access
+npm install -g @modelcontextprotocol/server-filesystem
+
+# GitHub integration
+npm install -g @modelcontextprotocol/server-github
+
+# Or use npx (no installation needed)
+# Just use "npx" as the command in server_configs
+```
+
+Server configuration format:
+
+**Local MCP Server (stdio):**
+```python
+server_configs = {
+    "filesystem": {
+        "command": "npx",
+        "args": ["-y", "@modelcontextprotocol/server-filesystem", "/path"],
+        "transport": "stdio"
+    }
+}
+```
+
+**Remote MCP Server (HTTP/SSE):**
+```python
+server_configs = {
+    "remote_api": {
+        "transport": "streamable_http",  # or "sse"
+        "url": "https://api.example.com/mcp",
+        "headers": {  # Optional authentication
+            "Authorization": "Bearer your-token-here",
+            "X-API-Key": "your-api-key"
+        }
+    }
+}
+```
+
+**Mixed Local + Remote:**
+```python
+server_configs = {
+    "local_fs": {
+        "command": "npx",
+        "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
+        "transport": "stdio"
+    },
+    "remote_api": {
+        "transport": "streamable_http",
+        "url": "https://api.example.com/mcp",
+        "headers": {"Authorization": "Bearer token"}
+    }
+}
+```
+
+### Examples
+
+```bash
+# Run local MCP integration example
+uv run python examples/mcp_example.py
+
+# Run remote MCP server example
+uv run python examples/mcp_remote_example.py
+```
+
+For more MCP servers: https://github.com/modelcontextprotocol/servers
+
 ## Architecture
 
 Alfredo provides a layered architecture with multiple usage patterns to fit different use cases.
