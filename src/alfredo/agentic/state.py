@@ -20,6 +20,7 @@ class AgentState(TypedDict):
         max_context_tokens: Maximum number of tokens allowed in context
         final_answer: Answer provided by attempt_answer tool (if any)
         is_verified: Whether the final answer has been verified
+        todo_list: Optional todo list for tracking task progress (numbered checklist)
     """
 
     messages: Annotated[Sequence[BaseMessage], add_messages]
@@ -29,3 +30,4 @@ class AgentState(TypedDict):
     max_context_tokens: int
     final_answer: Optional[str]
     is_verified: bool
+    todo_list: Optional[str]

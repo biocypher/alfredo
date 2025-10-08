@@ -95,6 +95,19 @@ def verification_router(state: AgentState) -> Literal["__end__", "replan"]:
         return "replan"
 
 
+def _has_todo_tools(tools: list) -> bool:
+    """Check if todo list tools are present in the tool list.
+
+    Args:
+        tools: List of tools
+
+    Returns:
+        True if write_todo_list or read_todo_list tools are present
+    """
+    tool_names = {getattr(t, "name", "") for t in tools}
+    return "write_todo_list" in tool_names or "read_todo_list" in tool_names
+
+
 def create_agentic_graph(
     cwd: str = ".",
     model_name: str = "gpt-4.1-mini",
@@ -129,12 +142,15 @@ def create_agentic_graph(
         # Get all Alfredo tools (includes attempt_completion)
         tools = create_langchain_tools(cwd=cwd)
 
+    # Check if todo tools are present
+    has_todo_tools = _has_todo_tools(tools)
+
     # Bind tools to model for agent node
-    model_with_tools = model.bind_tools(tools)
+    model_with_tools = model.bind_tools(tools, tool_choice="auto")
 
     # Create nodes
-    planner_node = create_planner_node(model)
-    agent_node = create_agent_node(model_with_tools)
+    planner_node = create_planner_node(model, has_todo_tools=has_todo_tools)
+    agent_node = create_agent_node(model_with_tools, has_todo_tools=has_todo_tools)
     tools_node = create_tools_node(tools)
     verifier_node = create_verifier_node(model)
     replan_node = create_replan_node(model)

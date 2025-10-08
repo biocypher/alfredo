@@ -147,7 +147,7 @@ def create_langchain_tools(
     check_langchain_available()
 
     # Import handlers to ensure they're registered
-    from alfredo.tools.handlers import command, discovery, file_ops, workflow  # noqa: F401
+    from alfredo.tools.handlers import command, discovery, file_ops, todo, workflow  # noqa: F401
 
     if tool_ids is None:
         # Get all tools for the model family

@@ -96,6 +96,7 @@ class Agent:
             "max_context_tokens": self.max_context_tokens,
             "final_answer": None,
             "is_verified": False,
+            "todo_list": None,
         }
 
         if self.verbose:

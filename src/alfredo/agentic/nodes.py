@@ -17,11 +17,12 @@ from alfredo.agentic.prompts import (
 from alfredo.agentic.state import AgentState
 
 
-def create_planner_node(model: BaseChatModel) -> Any:
+def create_planner_node(model: BaseChatModel, has_todo_tools: bool = False) -> Any:
     """Create the planner node that generates initial implementation plans.
 
     Args:
         model: The language model to use for planning
+        has_todo_tools: Whether todo list tools are available
 
     Returns:
         Planner node function
@@ -40,7 +41,7 @@ def create_planner_node(model: BaseChatModel) -> Any:
         plan_iteration = state.get("plan_iteration", 0)
 
         # Get planning prompt
-        planning_prompt = get_planning_prompt(task)
+        planning_prompt = get_planning_prompt(task, has_todo_tools=has_todo_tools)
 
         # Generate plan
         messages = [HumanMessage(content=planning_prompt)]
@@ -57,11 +58,12 @@ def create_planner_node(model: BaseChatModel) -> Any:
     return planner_node
 
 
-def create_agent_node(model: BaseChatModel) -> Any:
+def create_agent_node(model: BaseChatModel, has_todo_tools: bool = False) -> Any:
     """Create the agent node that performs reasoning and tool calling.
 
     Args:
         model: The language model with tools bound
+        has_todo_tools: Whether todo list tools are available
 
     Returns:
         Agent node function
@@ -81,7 +83,7 @@ def create_agent_node(model: BaseChatModel) -> Any:
         messages = list(state["messages"])
 
         # Create system message with task and plan context
-        system_msg = SystemMessage(content=get_agent_system_prompt(task, plan))
+        system_msg = SystemMessage(content=get_agent_system_prompt(task, plan, has_todo_tools=has_todo_tools))
 
         # Invoke model with full context
         full_messages = [system_msg, *messages]
@@ -96,13 +98,69 @@ def create_agent_node(model: BaseChatModel) -> Any:
 def create_tools_node(tools: Sequence[Any]) -> Any:
     """Create the tools node that executes tool calls.
 
+    This wraps LangGraph's ToolNode and adds special handling for todo list tools
+    to sync the todo_list state between AgentState and TodoStateManager.
+
     Args:
         tools: Sequence of available tools (BaseTool or compatible)
 
     Returns:
-        Tools node (using LangGraph's ToolNode)
+        Tools node function
     """
-    return ToolNode(tools)
+    # Check if todo tools are present
+    tool_names = {getattr(t, "name", "") for t in tools}
+    has_todo_tools = "write_todo_list" in tool_names or "read_todo_list" in tool_names
+
+    # If no todo tools, just return standard ToolNode
+    if not has_todo_tools:
+        return ToolNode(tools)
+
+    # Create LangGraph's standard ToolNode
+    base_tools_node = ToolNode(tools)
+
+    def tools_node_wrapper(state: AgentState) -> dict[str, Any]:
+        """Execute tools and sync todo list state.
+
+        Args:
+            state: Current agent state
+
+        Returns:
+            Updated state with tool results and synced todo_list
+        """
+        # Sync state to TodoStateManager before execution
+        try:
+            from alfredo.tools.handlers.todo import TodoStateManager
+
+            manager = TodoStateManager()
+            current_todo = state.get("todo_list")
+            manager.set_todo_list(current_todo)
+        except ImportError:
+            # Todo tools not available, skip sync
+            pass
+
+        # Execute tools using LangGraph's ToolNode
+        # ToolNode is callable and returns state updates
+        result = base_tools_node.invoke(state)
+
+        # Sync TodoStateManager back to state after execution
+        try:
+            from alfredo.tools.handlers.todo import TodoStateManager
+
+            manager = TodoStateManager()
+            updated_todo = manager.get_todo_list()
+            # Add todo_list to result if it's a dict
+            if isinstance(result, dict):
+                result["todo_list"] = updated_todo
+            else:
+                # If result is not a dict, create a dict with messages and todo_list
+                result = {"messages": result.get("messages", []), "todo_list": updated_todo}
+        except ImportError:
+            # Todo tools not available, skip sync
+            pass
+
+        return result  # type: ignore[no-any-return]
+
+    return tools_node_wrapper
 
 
 def format_execution_trace(messages: Sequence) -> str:  # noqa: C901
