@@ -13,11 +13,17 @@ Python harness for AI agents with comprehensive tool execution capabilities.
 
 ## Features
 
+🤖 **Autonomous Agent** - Agent class with automatic planning, execution, and verification
+
 ✨ **Comprehensive Tool System** - 8 built-in tools for file operations, command execution, and workflow control
+
+🔗 **MCP Integration** - Connect to any MCP server for extended capabilities
 
 🔧 **LangChain/LangGraph Compatible** - Seamlessly integrate with LangChain agents and workflows
 
-🎯 **Model Agnostic** - Support for different LLM families (Anthropic, OpenAI, Gemini)
+🎯 **Model Agnostic** - Support for different LLM providers (OpenAI, Anthropic, and more)
+
+📊 **Execution Tracing** - View detailed traces of all agent actions and tool calls
 
 📦 **Easy to Extend** - Simple API for creating custom tools
 
@@ -28,48 +34,75 @@ Python harness for AI agents with comprehensive tool execution capabilities.
 ### Installation
 
 ```bash
-# Basic installation
+# Full installation with agentic scaffold
 uv add alfredo
 
-# With LangChain support
-uv add alfredo[langchain]
+# Or install from PyPI
+pip install alfredo
 ```
 
-### Basic Usage
+### Basic Usage - Agent Class (Recommended)
+
+The Agent class provides autonomous task execution with automatic planning and verification:
 
 ```python
 from alfredo import Agent
 
 # Create an agent
-agent = Agent()
+agent = Agent(
+    cwd=".",
+    model_name="gpt-4.1-mini",  # or "anthropic/claude-3-5-sonnet-20241022"
+    verbose=True
+)
 
-# Get system prompt with tool definitions
-prompt = agent.get_system_prompt(include_examples=True)
+# Run a task
+agent.run("Create a Python script that prints 'Hello, World!'")
 
-# Parse and execute tools from model output
-model_output = """
-<read_file>
-<path>config.yaml</path>
-</read_file>
-"""
+# View execution trace
+agent.display_trace()
 
-result = agent.execute_from_text(model_output)
-if result.success:
-    print(result.output)
+# Access results
+print(agent.results["final_answer"])
 ```
 
 ### LangChain Integration
+
+Convert Alfredo tools to LangChain format for custom agent implementations:
 
 ```python
 from alfredo.integrations.langchain import create_all_langchain_tools
 from langchain_anthropic import ChatAnthropic
 
 # Convert Alfredo tools to LangChain format
-tools = create_all_langchain_tools()
+tools = create_all_langchain_tools(cwd=".")
 
 # Use with any LangChain agent
 model = ChatAnthropic(model="claude-3-5-sonnet-20241022")
 model_with_tools = model.bind_tools(tools)
+```
+
+### MCP Integration
+
+Combine Alfredo tools with MCP servers for extended capabilities:
+
+```python
+from alfredo import Agent
+from alfredo.integrations.mcp import load_combined_tools_sync
+
+# Configure MCP servers
+server_configs = {
+    "biocontext": {
+        "transport": "streamable_http",
+        "url": "https://mcp.biocontext.ai/mcp/",
+    }
+}
+
+# Load tools
+tools = load_combined_tools_sync(cwd=".", mcp_server_configs=server_configs)
+
+# Create agent with combined toolset
+agent = Agent(cwd=".", tools=tools)
+agent.run("Get the interactors of TP53 in human")
 ```
 
 ## Available Tools
@@ -93,52 +126,56 @@ model_with_tools = model.bind_tools(tools)
 
 ## Examples
 
-### File Operations
+### Agent Class Usage
+
+The Agent class autonomously plans and executes tasks:
 
 ```python
 from alfredo import Agent
 
-agent = Agent(cwd="/path/to/project")
+# Create agent
+agent = Agent(cwd=".", model_name="gpt-4.1-mini", verbose=True)
 
-# Read a file
-result = agent.execute_from_text("""
-<read_file>
-<path>src/main.py</path>
-</read_file>
-""")
+# File operations
+agent.run("Read config.yaml and create a summary in summary.txt")
 
-# Write a file
-result = agent.execute_from_text("""
-<write_to_file>
-<path>output.txt</path>
-<content>Hello, World!</content>
-</write_to_file>
-""")
+# Command execution
+agent.run("Run the test suite and report any failures")
+
+# File discovery
+agent.run("Find all Python test files and count how many there are")
+
+# Display execution trace
+agent.display_trace()
 ```
 
-### Command Execution
+### Functional API
+
+For one-off tasks without creating an agent instance:
 
 ```python
-# Execute commands
-result = agent.execute_from_text("""
-<execute_command>
-<command>pytest tests/</command>
-<timeout>60</timeout>
-</execute_command>
-""")
+from alfredo.agentic.graph import run_agentic_task
+
+result = run_agentic_task(
+    task="Create a hello world Python script",
+    cwd=".",
+    model_name="gpt-4.1-mini",
+    verbose=True
+)
+
+print(result["final_answer"])
 ```
 
-### File Discovery
+### OpenAI Native Integration
+
+Direct OpenAI API integration without LangChain:
 
 ```python
-# Search for patterns
-result = agent.execute_from_text("""
-<search_files>
-<path>.</path>
-<regex>def test_.*</regex>
-<file_pattern>*.py</file_pattern>
-</search_files>
-""")
+from alfredo import OpenAIAgent
+
+agent = OpenAIAgent(cwd=".", model="gpt-4.1-mini")
+result = agent.run("Read the file config.json and summarize it")
+print(result["final_answer"])
 ```
 
 ## Development

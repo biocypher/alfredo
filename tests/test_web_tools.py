@@ -4,7 +4,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from alfredo.agent import Agent
+from alfredo.tools.handlers.web import WebFetchHandler
 
 
 @pytest.fixture
@@ -30,15 +30,9 @@ def mock_response() -> Mock:
 def test_web_fetch_success(mock_response: Mock) -> None:
     """Test successful web content fetching."""
     with patch("alfredo.tools.handlers.web.requests.get", return_value=mock_response):
-        agent = Agent()
+        handler = WebFetchHandler()
 
-        text = """
-        <web_fetch>
-        <url>https://example.com</url>
-        </web_fetch>
-        """
-
-        result = agent.execute_from_text(text)
+        result = handler.execute({"url": "https://example.com"})
         assert result is not None
         assert result.success
         assert "Welcome" in result.output
@@ -49,15 +43,9 @@ def test_web_fetch_success(mock_response: Mock) -> None:
 def test_web_fetch_http_upgrade(mock_response: Mock) -> None:
     """Test HTTP URL is upgraded to HTTPS."""
     with patch("alfredo.tools.handlers.web.requests.get", return_value=mock_response) as mock_get:
-        agent = Agent()
+        handler = WebFetchHandler()
 
-        text = """
-        <web_fetch>
-        <url>http://example.com</url>
-        </web_fetch>
-        """
-
-        result = agent.execute_from_text(text)
+        result = handler.execute({"url": "http://example.com"})
         assert result is not None
         assert result.success
 
@@ -69,15 +57,9 @@ def test_web_fetch_http_upgrade(mock_response: Mock) -> None:
 
 def test_web_fetch_invalid_url() -> None:
     """Test error handling for invalid URL."""
-    agent = Agent()
+    handler = WebFetchHandler()
 
-    text = """
-    <web_fetch>
-    <url>not-a-valid-url</url>
-    </web_fetch>
-    """
-
-    result = agent.execute_from_text(text)
+    result = handler.execute({"url": "not-a-valid-url"})
     assert result is not None
     assert not result.success
     assert result.error is not None
@@ -86,14 +68,9 @@ def test_web_fetch_invalid_url() -> None:
 
 def test_web_fetch_missing_url() -> None:
     """Test error handling for missing URL parameter."""
-    agent = Agent()
+    handler = WebFetchHandler()
 
-    text = """
-    <web_fetch>
-    </web_fetch>
-    """
-
-    result = agent.execute_from_text(text)
+    result = handler.execute({})
     assert result is not None
     assert not result.success
     assert result.error is not None
@@ -105,15 +82,9 @@ def test_web_fetch_timeout() -> None:
     import requests
 
     with patch("alfredo.tools.handlers.web.requests.get", side_effect=requests.exceptions.Timeout()):
-        agent = Agent()
+        handler = WebFetchHandler()
 
-        text = """
-        <web_fetch>
-        <url>https://example.com</url>
-        </web_fetch>
-        """
-
-        result = agent.execute_from_text(text)
+        result = handler.execute({"url": "https://example.com"})
         assert result is not None
         assert not result.success
         assert result.error is not None
@@ -128,15 +99,9 @@ def test_web_fetch_connection_error() -> None:
         "alfredo.tools.handlers.web.requests.get",
         side_effect=requests.exceptions.ConnectionError(),
     ):
-        agent = Agent()
+        handler = WebFetchHandler()
 
-        text = """
-        <web_fetch>
-        <url>https://example.com</url>
-        </web_fetch>
-        """
-
-        result = agent.execute_from_text(text)
+        result = handler.execute({"url": "https://example.com"})
         assert result is not None
         assert not result.success
         assert result.error is not None
@@ -152,15 +117,9 @@ def test_web_fetch_non_html_text_content() -> None:
     response.raise_for_status = Mock()
 
     with patch("alfredo.tools.handlers.web.requests.get", return_value=response):
-        agent = Agent()
+        handler = WebFetchHandler()
 
-        text = """
-        <web_fetch>
-        <url>https://api.example.com/data</url>
-        </web_fetch>
-        """
-
-        result = agent.execute_from_text(text)
+        result = handler.execute({"url": "https://api.example.com/data"})
         assert result is not None
         assert result.success
         # Should return JSON as-is
@@ -177,15 +136,9 @@ def test_web_fetch_binary_content() -> None:
     response.raise_for_status = Mock()
 
     with patch("alfredo.tools.handlers.web.requests.get", return_value=response):
-        agent = Agent()
+        handler = WebFetchHandler()
 
-        text = """
-        <web_fetch>
-        <url>https://example.com/image.png</url>
-        </web_fetch>
-        """
-
-        result = agent.execute_from_text(text)
+        result = handler.execute({"url": "https://example.com/image.png"})
         assert result is not None
         assert not result.success
         assert result.error is not None
@@ -213,15 +166,9 @@ def test_web_fetch_html_with_scripts() -> None:
     response.raise_for_status = Mock()
 
     with patch("alfredo.tools.handlers.web.requests.get", return_value=response):
-        agent = Agent()
+        handler = WebFetchHandler()
 
-        text = """
-        <web_fetch>
-        <url>https://example.com</url>
-        </web_fetch>
-        """
-
-        result = agent.execute_from_text(text)
+        result = handler.execute({"url": "https://example.com"})
         assert result is not None
         assert result.success
         assert "Clean Content" in result.output
@@ -240,15 +187,9 @@ def test_web_fetch_redirects() -> None:
     response.raise_for_status = Mock()
 
     with patch("alfredo.tools.handlers.web.requests.get", return_value=response) as mock_get:
-        agent = Agent()
+        handler = WebFetchHandler()
 
-        text = """
-        <web_fetch>
-        <url>https://example.com/redirect</url>
-        </web_fetch>
-        """
-
-        result = agent.execute_from_text(text)
+        result = handler.execute({"url": "https://example.com/redirect"})
         assert result is not None
         assert result.success
 
@@ -267,15 +208,9 @@ def test_web_fetch_user_agent() -> None:
     response.raise_for_status = Mock()
 
     with patch("alfredo.tools.handlers.web.requests.get", return_value=response) as mock_get:
-        agent = Agent()
+        handler = WebFetchHandler()
 
-        text = """
-        <web_fetch>
-        <url>https://example.com</url>
-        </web_fetch>
-        """
-
-        result = agent.execute_from_text(text)
+        result = handler.execute({"url": "https://example.com"})
         assert result is not None
         assert result.success
 

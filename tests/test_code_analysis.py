@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-from alfredo.agent import Agent
+from alfredo.tools.handlers.code_analysis import ListCodeDefinitionNamesHandler
 
 
 @pytest.fixture
@@ -81,15 +81,9 @@ function processUser(user: User): void {
 
 def test_list_code_definitions_python(temp_code_dir: Path) -> None:
     """Test listing code definitions in Python files."""
-    agent = Agent(cwd=str(temp_code_dir))
+    handler = ListCodeDefinitionNamesHandler(cwd=str(temp_code_dir))
 
-    text = """
-    <list_code_definition_names>
-    <path>.</path>
-    </list_code_definition_names>
-    """
-
-    result = agent.execute_from_text(text)
+    result = handler.execute({"path": "."})
     assert result is not None
     assert result.success
     assert "sample.py" in result.output
@@ -100,15 +94,9 @@ def test_list_code_definitions_python(temp_code_dir: Path) -> None:
 
 def test_list_code_definitions_javascript(temp_code_dir: Path) -> None:
     """Test listing code definitions in JavaScript files."""
-    agent = Agent(cwd=str(temp_code_dir))
+    handler = ListCodeDefinitionNamesHandler(cwd=str(temp_code_dir))
 
-    text = """
-    <list_code_definition_names>
-    <path>.</path>
-    </list_code_definition_names>
-    """
-
-    result = agent.execute_from_text(text)
+    result = handler.execute({"path": "."})
     assert result is not None
     assert result.success
     assert "sample.js" in result.output
@@ -118,15 +106,9 @@ def test_list_code_definitions_javascript(temp_code_dir: Path) -> None:
 
 def test_list_code_definitions_typescript(temp_code_dir: Path) -> None:
     """Test listing code definitions in TypeScript files."""
-    agent = Agent(cwd=str(temp_code_dir))
+    handler = ListCodeDefinitionNamesHandler(cwd=str(temp_code_dir))
 
-    text = """
-    <list_code_definition_names>
-    <path>.</path>
-    </list_code_definition_names>
-    """
-
-    result = agent.execute_from_text(text)
+    result = handler.execute({"path": "."})
     assert result is not None
     assert result.success
     assert "sample.ts" in result.output
@@ -138,15 +120,9 @@ def test_list_code_definitions_typescript(temp_code_dir: Path) -> None:
 
 def test_list_code_definitions_nonexistent_path() -> None:
     """Test error handling for nonexistent path."""
-    agent = Agent()
+    handler = ListCodeDefinitionNamesHandler()
 
-    text = """
-    <list_code_definition_names>
-    <path>/nonexistent/path</path>
-    </list_code_definition_names>
-    """
-
-    result = agent.execute_from_text(text)
+    result = handler.execute({"path": "/nonexistent/path"})
     assert result is not None
     assert not result.success
     assert result.error is not None
@@ -155,14 +131,9 @@ def test_list_code_definitions_nonexistent_path() -> None:
 
 def test_list_code_definitions_missing_path() -> None:
     """Test error handling for missing path parameter."""
-    agent = Agent()
+    handler = ListCodeDefinitionNamesHandler()
 
-    text = """
-    <list_code_definition_names>
-    </list_code_definition_names>
-    """
-
-    result = agent.execute_from_text(text)
+    result = handler.execute({})
     assert result is not None
     assert not result.success
     assert result.error is not None
@@ -171,15 +142,9 @@ def test_list_code_definitions_missing_path() -> None:
 
 def test_list_code_definitions_file_not_directory(temp_code_dir: Path) -> None:
     """Test error handling when path is a file, not a directory."""
-    agent = Agent(cwd=str(temp_code_dir))
+    handler = ListCodeDefinitionNamesHandler(cwd=str(temp_code_dir))
 
-    text = """
-    <list_code_definition_names>
-    <path>sample.py</path>
-    </list_code_definition_names>
-    """
-
-    result = agent.execute_from_text(text)
+    result = handler.execute({"path": "sample.py"})
     assert result is not None
     assert not result.success
     assert result.error is not None
@@ -189,15 +154,9 @@ def test_list_code_definitions_file_not_directory(temp_code_dir: Path) -> None:
 def test_list_code_definitions_empty_directory() -> None:
     """Test handling of directory with no source files."""
     with tempfile.TemporaryDirectory() as tmpdir:
-        agent = Agent(cwd=tmpdir)
+        handler = ListCodeDefinitionNamesHandler(cwd=tmpdir)
 
-        text = """
-        <list_code_definition_names>
-        <path>.</path>
-        </list_code_definition_names>
-        """
-
-        result = agent.execute_from_text(text)
+        result = handler.execute({"path": "."})
         assert result is not None
         assert result.success
         assert "No definitions found" in result.output
@@ -218,15 +177,9 @@ class NestedClass:
 """
     )
 
-    agent = Agent(cwd=str(temp_code_dir))
+    handler = ListCodeDefinitionNamesHandler(cwd=str(temp_code_dir))
 
-    text = """
-    <list_code_definition_names>
-    <path>.</path>
-    </list_code_definition_names>
-    """
-
-    result = agent.execute_from_text(text)
+    result = handler.execute({"path": "."})
     assert result is not None
     assert result.success
     assert "subdir" in result.output or "nested.py" in result.output
@@ -236,15 +189,9 @@ class NestedClass:
 
 def test_list_code_definitions_includes_line_numbers(temp_code_dir: Path) -> None:
     """Test that output includes line numbers."""
-    agent = Agent(cwd=str(temp_code_dir))
+    handler = ListCodeDefinitionNamesHandler(cwd=str(temp_code_dir))
 
-    text = """
-    <list_code_definition_names>
-    <path>.</path>
-    </list_code_definition_names>
-    """
-
-    result = agent.execute_from_text(text)
+    result = handler.execute({"path": "."})
     assert result is not None
     assert result.success
     assert "line" in result.output.lower()

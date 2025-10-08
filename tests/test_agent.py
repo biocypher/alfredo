@@ -1,125 +1,106 @@
-"""Tests for the Agent class."""
+"""Tests for the Agent class (agentic scaffold)."""
 
+import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from alfredo import Agent
+import pytest
+
+# Test if LangGraph is available
+try:
+    from alfredo import Agent
+
+    LANGGRAPH_AVAILABLE = True
+except ImportError:
+    LANGGRAPH_AVAILABLE = False
 
 
+@pytest.mark.skipif(not LANGGRAPH_AVAILABLE, reason="LangGraph not installed")
 def test_agent_initialization() -> None:
     """Test that agent initializes correctly."""
-    agent = Agent()
-    assert agent.cwd is not None
-    assert agent.model_family is not None
+    agent = Agent(cwd=".")
+    assert agent.cwd == "."
+    assert agent.model_name == "gpt-4.1-mini"  # default
+    assert agent.graph is not None
+    assert agent.results is None  # No run yet
 
 
-def test_get_system_prompt() -> None:
-    """Test system prompt generation."""
-    agent = Agent()
-    prompt = agent.get_system_prompt()
-
-    assert "Tools" in prompt or "tools" in prompt.lower()
-    assert "read_file" in prompt
-    assert "write_to_file" in prompt
-    assert "execute_command" in prompt
-
-
-def test_get_available_tools() -> None:
-    """Test getting available tools list."""
-    agent = Agent()
-    tools = agent.get_available_tools()
-
-    assert len(tools) > 0
-    assert "read_file" in tools
-    assert "write_to_file" in tools
-    assert "list_files" in tools
-
-
-def test_parse_tool_use() -> None:
-    """Test parsing tool invocations."""
-    agent = Agent()
-
-    # Test valid tool use
-    text = """
-    <read_file>
-    <path>test.txt</path>
-    </read_file>
-    """
-    tool_use = agent.parse_tool_use(text)
-
-    assert tool_use is not None
-    assert tool_use.name == "read_file"
-    assert tool_use.params["path"] == "test.txt"
-
-
-def test_execute_read_file() -> None:
-    """Test reading a file through the agent."""
+@pytest.mark.skipif(not LANGGRAPH_AVAILABLE, reason="LangGraph not installed")
+@pytest.mark.skipif(not os.getenv("OPENAI_API_KEY"), reason="OpenAI API key not set")
+def test_agent_run_simple_task() -> None:
+    """Test running a simple file creation task."""
     with TemporaryDirectory() as tmpdir:
-        tmppath = Path(tmpdir)
+        agent = Agent(cwd=tmpdir, model_name="gpt-4.1-mini", verbose=False)
 
-        # Create a test file
-        test_file = tmppath / "test.txt"
-        test_file.write_text("Hello, World!")
+        # Run a simple task
+        task = "Create a file called test.txt with the content 'Hello, World!'"
+        result = agent.run(task)
 
-        # Create agent with temp directory
-        agent = Agent(cwd=str(tmppath))
-
-        # Execute read_file
-        text = """
-        <read_file>
-        <path>test.txt</path>
-        </read_file>
-        """
-        result = agent.execute_from_text(text)
-
+        # Check result structure
         assert result is not None
-        assert result.success is True
-        assert "Hello, World!" in result.output
+        assert "messages" in result
+        assert "task" in result
+        assert "final_answer" in result
+        assert "is_verified" in result
+
+        # Check that agent stores results
+        assert agent.results is not None
+        assert agent.results == result
+
+        # Check that file was created
+        test_file = Path(tmpdir) / "test.txt"
+        assert test_file.exists()
+        assert "Hello, World!" in test_file.read_text()
 
 
-def test_execute_write_file() -> None:
-    """Test writing a file through the agent."""
+@pytest.mark.skipif(not LANGGRAPH_AVAILABLE, reason="LangGraph not installed")
+@pytest.mark.skipif(not os.getenv("OPENAI_API_KEY"), reason="OpenAI API key not set")
+def test_agent_display_trace() -> None:
+    """Test display_trace method."""
     with TemporaryDirectory() as tmpdir:
-        agent = Agent(cwd=tmpdir)
+        agent = Agent(cwd=tmpdir, model_name="gpt-4.1-mini", verbose=False)
 
-        # Execute write_to_file
-        text = """
-        <write_to_file>
-        <path>output.txt</path>
-        <content>Test content</content>
-        </write_to_file>
-        """
-        result = agent.execute_from_text(text)
+        # Run a task first
+        task = "List all files in the current directory"
+        agent.run(task)
 
-        assert result is not None
-        assert result.success is True
-
-        # Verify file was created
-        output_file = Path(tmpdir) / "output.txt"
-        assert output_file.exists()
-        assert output_file.read_text() == "Test content"
+        # display_trace should not raise an error
+        # (We can't easily test the output, but we can ensure it doesn't crash)
+        agent.display_trace()
 
 
-def test_execute_list_files() -> None:
-    """Test listing files through the agent."""
-    with TemporaryDirectory() as tmpdir:
-        tmppath = Path(tmpdir)
+@pytest.mark.skipif(not LANGGRAPH_AVAILABLE, reason="LangGraph not installed")
+def test_agent_display_trace_without_run() -> None:
+    """Test that display_trace raises error if run() wasn't called."""
+    agent = Agent(cwd=".")
 
-        # Create some test files
-        (tmppath / "file1.txt").write_text("content1")
-        (tmppath / "file2.txt").write_text("content2")
+    with pytest.raises(RuntimeError, match="No execution results available"):
+        agent.display_trace()
 
-        agent = Agent(cwd=str(tmppath))
 
-        # Execute list_files
-        text = """
-        <list_files>
-        <path>.</path>
-        </list_files>
-        """
-        result = agent.execute_from_text(text)
+@pytest.mark.skipif(not LANGGRAPH_AVAILABLE, reason="LangGraph not installed")
+def test_agent_custom_tools() -> None:
+    """Test that agent accepts custom tools list."""
+    from alfredo.integrations.langchain import create_all_langchain_tools
 
-        assert result is not None
-        assert result.success is True
-        assert "file1.txt" in result.output
-        assert "file2.txt" in result.output
+    # Create a limited toolset
+    tools = create_all_langchain_tools(cwd=".", tool_ids=["list_files", "read_file"])
+
+    agent = Agent(cwd=".", tools=tools, verbose=False)
+    assert agent.tools is not None
+    assert len(agent.tools) == 2
+
+
+@pytest.mark.skipif(not LANGGRAPH_AVAILABLE, reason="LangGraph not installed")
+def test_agent_custom_model_kwargs() -> None:
+    """Test that agent accepts custom model kwargs."""
+    agent = Agent(
+        cwd=".",
+        model_name="gpt-4.1-mini",
+        temperature=0.5,
+        max_tokens=1000,
+        verbose=False,
+    )
+
+    assert agent.model_kwargs["temperature"] == 0.5
+    assert agent.model_kwargs["max_tokens"] == 1000

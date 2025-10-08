@@ -97,7 +97,7 @@ def verification_router(state: AgentState) -> Literal["__end__", "replan"]:
 
 def create_agentic_graph(
     cwd: str = ".",
-    model_name: str = "gpt-4o-mini",
+    model_name: str = "gpt-4.1-mini",
     max_context_tokens: int = 100000,
     tools: Optional[list] = None,
     recursion_limit: int = 50,
@@ -107,7 +107,7 @@ def create_agentic_graph(
 
     Args:
         cwd: Working directory for file operations
-        model_name: Name of the model to use (default: gpt-4o-mini)
+        model_name: Name of the model to use (default: gpt-4.1-mini)
         max_context_tokens: Maximum context window size in tokens
         tools: Optional list of tools. If None, uses all Alfredo tools.
         recursion_limit: Maximum number of graph steps before raising an error (default: 50)
@@ -193,7 +193,7 @@ def create_agentic_graph(
 def run_agentic_task(
     task: str,
     cwd: str = ".",
-    model_name: str = "gpt-4o-mini",
+    model_name: str = "gpt-4.1-mini",
     max_context_tokens: int = 100000,
     verbose: bool = True,
     tools: Optional[list] = None,
@@ -201,6 +201,9 @@ def run_agentic_task(
     **kwargs: Any,
 ) -> dict[str, Any]:
     """Run an agentic task from start to finish.
+
+    This is a convenience function that creates an Agent and runs a task.
+    For multiple tasks, consider creating an Agent instance and calling run() directly.
 
     Args:
         task: The task to accomplish
@@ -215,41 +218,23 @@ def run_agentic_task(
 
     Returns:
         Final state dictionary with results
+
+    Example:
+        >>> result = run_agentic_task("Create a hello world script", verbose=True)
+        >>> print(result["final_answer"])
     """
-    # Create graph
-    graph = create_agentic_graph(
+    # Import here to avoid circular import
+    from alfredo.agentic.agent import Agent
+
+    # Create agent and run task
+    agent = Agent(
         cwd=cwd,
         model_name=model_name,
         max_context_tokens=max_context_tokens,
         tools=tools,
+        verbose=verbose,
         recursion_limit=recursion_limit,
         **kwargs,
     )
 
-    # Initial state
-    initial_state: AgentState = {
-        "messages": [],
-        "task": task,
-        "plan": "",
-        "plan_iteration": 0,
-        "max_context_tokens": max_context_tokens,
-        "final_answer": None,
-        "is_verified": False,
-    }
-
-    if verbose:
-        print(f"🚀 Starting agentic task: {task}\n")
-
-    # Run the graph
-    try:
-        final_state = graph.invoke(initial_state, config={"recursion_limit": recursion_limit})
-    except Exception as e:
-        if verbose:
-            print(f"\n❌ Error during execution: {e}")
-        raise
-    else:
-        if verbose:
-            print("\n✅ Task completed!")
-            print(f"\n📝 Final Answer:\n{final_state.get('final_answer', 'No answer provided')}")
-
-        return final_state  # type: ignore[no-any-return]
+    return agent.run(task)

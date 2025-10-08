@@ -1,6 +1,5 @@
 """Alfredo: Python harness for AI agents with tool execution capabilities."""
 
-from alfredo.agent import Agent
 from alfredo.tools.base import BaseToolHandler, ToolResult, ToolUse
 from alfredo.tools.registry import registry
 from alfredo.tools.specs import ModelFamily, ToolParameter, ToolSpec
@@ -8,7 +7,6 @@ from alfredo.tools.specs import ModelFamily, ToolParameter, ToolSpec
 __version__ = "0.0.1"
 
 __all__ = [
-    "Agent",
     "BaseToolHandler",
     "ModelFamily",
     "ToolParameter",
@@ -17,6 +15,14 @@ __all__ = [
     "ToolUse",
     "registry",
 ]
+
+# Agentic scaffold (recommended usage)
+try:
+    from alfredo.agentic.agent import Agent  # noqa: F401
+
+    __all__.append("Agent")
+except ImportError:
+    pass  # LangGraph not installed
 
 # Optional OpenAI integration (if openai is installed)
 try:

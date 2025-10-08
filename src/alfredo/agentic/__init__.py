@@ -1,9 +1,11 @@
 """Agentic scaffold for autonomous task execution with planning and verification."""
 
+from alfredo.agentic.agent import Agent
 from alfredo.agentic.graph import create_agentic_graph
 from alfredo.agentic.state import AgentState
 
 __all__ = [
+    "Agent",
     "AgentState",
     "create_agentic_graph",
 ]

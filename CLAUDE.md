@@ -86,7 +86,31 @@ model = ChatAnthropic(model="claude-3-5-sonnet-20241022")
 model_with_tools = model.bind_tools(tools)
 ```
 
-### Run Agentic Scaffold
+### Using the Agent Class (Recommended)
+
+```python
+from alfredo import Agent
+
+# Create an agent instance
+agent = Agent(
+    cwd=".",
+    model_name="gpt-4.1-mini",
+    verbose=True
+)
+
+# Run a task
+result = agent.run("Create a hello world Python script")
+
+# Display execution trace
+agent.display_trace()
+
+# Access results
+print(agent.results["final_answer"])
+```
+
+### Functional API (Alternative)
+
+You can also use the functional API for one-off tasks:
 
 ```python
 from alfredo.agentic.graph import run_agentic_task
@@ -95,7 +119,7 @@ from alfredo.agentic.graph import run_agentic_task
 result = run_agentic_task(
     task="Create a hello world Python script",
     cwd=".",
-    model_name="gpt-4o-mini",
+    model_name="gpt-4.1-mini",
     verbose=True,
     recursion_limit=50
 )
@@ -104,11 +128,14 @@ result = run_agentic_task(
 ### Examples
 
 ```bash
+# Run Agent class example (recommended)
+uv run python examples/agent_example.py
+
+# Run functional API example
+uv run python examples/agentic_example.py
+
 # Run basic LangChain example
 uv run python examples/langchain_integration.py
-
-# Run agentic scaffold example
-uv run python examples/agentic_example.py
 
 # Test agentic scaffold
 uv run pytest tests/test_agentic_graph.py -v
@@ -146,6 +173,7 @@ mcp_tools = load_mcp_tools_sync(server_configs)
 ### Combining Alfredo + MCP Tools
 
 ```python
+from alfredo import Agent
 from alfredo.integrations.mcp import load_combined_tools_sync
 
 # Load both Alfredo and MCP tools in one call
@@ -154,28 +182,30 @@ tools = load_combined_tools_sync(
     mcp_server_configs=server_configs
 )
 
-# Use with agentic scaffold
-from alfredo.agentic.graph import run_agentic_task
-
-result = run_agentic_task(
-    task="Your task here",
+# Create agent with combined toolset
+agent = Agent(
     cwd=".",
-    model_name="gpt-4o-mini",
-    tools=tools,  # Pass custom toolset
+    model_name="gpt-4.1-mini",
+    tools=tools,
     verbose=True
 )
+
+# Run task
+agent.run("Your task here")
+agent.display_trace()
 ```
 
 ### Custom Tool Selection
 
 ```python
+from alfredo import Agent
 from alfredo.integrations.langchain import create_all_langchain_tools
 from alfredo.integrations.mcp import load_mcp_tools_sync
 
 # Load only specific Alfredo tools
 alfredo_tools = create_all_langchain_tools(
     cwd=".",
-    tool_ids=["read_file", "write_file", "list_files"]
+    tool_ids=["read_file", "write_file", "list_files", "attempt_completion"]
 )
 
 # Load MCP tools
@@ -184,17 +214,16 @@ mcp_tools = load_mcp_tools_sync(server_configs)
 # Combine manually
 custom_tools = alfredo_tools + mcp_tools
 
-# Use with run_agentic_task
-result = run_agentic_task(
-    task="Your task",
-    tools=custom_tools
-)
+# Create agent with custom toolset
+agent = Agent(cwd=".", tools=custom_tools)
+agent.run("Your task here")
 ```
 
 ### Async Usage
 
 ```python
 import asyncio
+from alfredo import Agent
 from alfredo.integrations.mcp import load_combined_tools
 
 async def main():
@@ -203,8 +232,9 @@ async def main():
         mcp_server_configs=server_configs
     )
 
-    # Use tools with run_agentic_task
-    result = run_agentic_task(task="...", tools=tools)
+    # Create agent with loaded tools
+    agent = Agent(cwd=".", tools=tools)
+    agent.run("Your task here")
 
 asyncio.run(main())
 ```
@@ -285,13 +315,43 @@ Alfredo provides a layered architecture with multiple usage patterns to fit diff
 
 ## Usage Patterns
 
-### Primary Usage: Agentic Scaffold (Recommended)
+### Primary Usage: Agent Class (Recommended)
 
-**For most users, the LangGraph agentic scaffold is the recommended approach.** It provides:
+**For most users, the `Agent` class is the recommended approach.** It provides:
 - Automatic planning and replanning
 - Verification of task completion
 - Sophisticated tool orchestration
 - Support for any LLM provider (OpenAI, Anthropic, etc.)
+- Execution trace display
+- Clean, object-oriented interface
+
+```python
+from alfredo import Agent
+
+# Create an agent
+agent = Agent(
+    cwd=".",
+    model_name="gpt-4.1-mini",
+    verbose=True
+)
+
+# Run tasks
+agent.run("Create a hello world Python script")
+
+# View execution trace
+agent.display_trace()
+
+# Access results
+print(agent.results["final_answer"])
+```
+
+The Agent class uses LangChain to automatically convert Alfredo tools to the native format of any LLM provider (OpenAI's function calling, Anthropic's tool use, etc.).
+
+### Alternative Usage Patterns
+
+For specialized use cases or direct control, Alfredo provides alternative execution modes:
+
+**1. Functional API** - For one-off tasks without creating an agent instance:
 
 ```python
 from alfredo.agentic.graph import run_agentic_task
@@ -299,23 +359,17 @@ from alfredo.agentic.graph import run_agentic_task
 result = run_agentic_task(
     task="Create a hello world Python script",
     cwd=".",
-    model_name="gpt-4o-mini",
+    model_name="gpt-4.1-mini",
     verbose=True
 )
 ```
 
-The agentic scaffold uses LangChain to automatically convert Alfredo tools to the native format of any LLM provider (OpenAI's function calling, Anthropic's tool use, etc.).
-
-### Alternative Usage Patterns
-
-For specialized use cases or direct control, Alfredo provides alternative execution modes:
-
-**1. Native OpenAI Agent** - Direct OpenAI API integration without LangChain:
+**2. Native OpenAI Agent** - Direct OpenAI API integration without LangChain:
 
 ```python
 from alfredo import OpenAIAgent
 
-agent = OpenAIAgent(cwd=".", model="gpt-4o-mini")
+agent = OpenAIAgent(cwd=".", model="gpt-4.1-mini")
 result = agent.run("Read the file config.json")
 ```
 
@@ -323,22 +377,6 @@ Use this when:
 - You want direct OpenAI API control without LangChain
 - You're building custom tool calling loops
 - You need minimal dependencies
-
-**2. XML-Based Agent** - Simple XML parsing for text-based tool invocations:
-
-```python
-from alfredo import Agent
-
-agent = Agent(cwd=".")
-prompt = agent.get_system_prompt()  # Contains XML tool definitions
-# Send prompt to LLM, get XML response
-result = agent.execute_from_text(llm_response)
-```
-
-Use this when:
-- You need a simple, minimal execution model
-- You're using Anthropic's XML-style prompts directly
-- You're building custom agent loops
 
 ## Core Architecture
 
