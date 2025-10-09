@@ -155,3 +155,43 @@ registry.register_spec(_read_todo_spec)
 
 registry.register_handler("write_todo_list", WriteTodoListHandler)
 registry.register_handler("read_todo_list", ReadTodoListHandler)
+
+
+# Node-specific system instructions for todo list tools
+# These are used when creating AlfredoTools from todo tools
+TODO_SYSTEM_INSTRUCTIONS = {
+    "planner": """
+# Todo List Tracking
+
+After creating your implementation plan, call the `write_todo_list` tool to create a numbered sequential checklist.
+The checklist should list all major steps in order (1, 2, 3...) with checkboxes to track completion.
+
+Example format:
+1. [ ] First task description
+2. [ ] Second task description
+3. [ ] Third task description
+
+This will help track progress as the task is executed.
+""",
+    "agent": """
+# Todo List Management
+
+You have access to todo list tools for tracking your progress:
+- `write_todo_list`: Create or update the numbered checklist
+- `read_todo_list`: Check current progress
+
+**Important Instructions:**
+- Work through tasks **sequentially** - complete task 1, then task 2, then task 3, etc.
+- After completing each task, update the checklist by calling `write_todo_list` with the completed task marked as [x]
+- **You can revise the checklist at any time** - add new items, reorder tasks, or modify descriptions as you discover new requirements
+- Use `read_todo_list` periodically to check your current progress
+
+Example progression:
+```
+1. [x] First task (completed)
+2. [x] Second task (completed)
+3. [ ] Third task (currently working on this)
+4. [ ] Fourth task (pending)
+```
+""",
+}

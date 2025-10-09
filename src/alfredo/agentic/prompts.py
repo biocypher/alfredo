@@ -1,32 +1,46 @@
 """Prompts for planning, execution, and verification in the agentic scaffold."""
 
+from typing import Any, Optional
 
-def get_planning_prompt(task: str, has_todo_tools: bool = False) -> str:
+
+def _extract_instructions_for_node(tools: list[Any], node_name: str) -> str:
+    """Extract all system instructions for a specific node from the tool list.
+
+    Args:
+        tools: List of tools (can be AlfredoTool or regular StructuredTool)
+        node_name: Name of the node to extract instructions for
+
+    Returns:
+        Concatenated instruction string, or empty string if no instructions
+    """
+    from alfredo.tools.alfredo_tool import AlfredoTool
+
+    instructions = []
+    for tool in tools:
+        if isinstance(tool, AlfredoTool):
+            instruction = tool.get_instruction_for_node(node_name)
+            if instruction:
+                instructions.append(instruction)
+
+    return "\n\n".join(instructions) if instructions else ""
+
+
+def get_planning_prompt(task: str, tools: Optional[list[Any]] = None) -> str:
     """Get the system prompt for creating an implementation plan.
 
     Args:
         task: The task to create a plan for
-        has_todo_tools: Whether todo list tools are available
+        tools: Optional list of tools (for extracting node-specific instructions)
 
     Returns:
         Formatted planning prompt
     """
-    todo_instruction = ""
-    if has_todo_tools:
-        todo_instruction = """
-
-# Todo List Tracking
-
-After creating your implementation plan, call the `write_todo_list` tool to create a numbered sequential checklist.
-The checklist should list all major steps in order (1, 2, 3...) with checkboxes to track completion.
-
-Example format:
-1. [ ] First task description
-2. [ ] Second task description
-3. [ ] Third task description
-
-This will help track progress as the task is executed.
-"""
+    # Extract tool-specific instructions for the planner node
+    tool_instructions = ""
+    if tools:
+        extracted = _extract_instructions_for_node(tools, "planner")
+        if extracted:
+            tool_instructions = f"\n\n# Tool-Specific Instructions\n\n{extracted}"
 
     return f"""You are a meticulous AI agent tasked with creating a comprehensive implementation plan.
 
@@ -82,46 +96,28 @@ IMPORTANT: The final step must ALWAYS be calling the attempt_completion tool to 
 - Be specific about file paths, commands, and tool usage
 - Consider dependencies between steps
 - Think about validation and testing
-- Keep the plan focused and actionable{todo_instruction}
-
+- Keep the plan focused and actionable
+{tool_instructions}
 Now create the implementation plan for the task above."""
 
 
-def get_agent_system_prompt(task: str, plan: str, has_todo_tools: bool = False) -> str:
+def get_agent_system_prompt(task: str, plan: str, tools: Optional[list[Any]] = None) -> str:
     """Get the system prompt for the agent node.
 
     Args:
         task: The original task
         plan: The current implementation plan
-        has_todo_tools: Whether todo list tools are available
+        tools: Optional list of tools (for extracting node-specific instructions)
 
     Returns:
         Formatted agent system prompt
     """
-    todo_instruction = ""
-    if has_todo_tools:
-        todo_instruction = """
-
-# Todo List Management
-
-You have access to todo list tools for tracking your progress:
-- `write_todo_list`: Create or update the numbered checklist
-- `read_todo_list`: Check current progress
-
-**Important Instructions:**
-- Work through tasks **sequentially** - complete task 1, then task 2, then task 3, etc.
-- After completing each task, update the checklist by calling `write_todo_list` with the completed task marked as [x]
-- **You can revise the checklist at any time** - add new items, reorder tasks, or modify descriptions as you discover new requirements
-- Use `read_todo_list` periodically to check your current progress
-
-Example progression:
-```
-1. [x] First task (completed)
-2. [x] Second task (completed)
-3. [ ] Third task (currently working on this)
-4. [ ] Fourth task (pending)
-```
-"""
+    # Extract tool-specific instructions for the agent node
+    tool_instructions = ""
+    if tools:
+        extracted = _extract_instructions_for_node(tools, "agent")
+        if extracted:
+            tool_instructions = f"\n\n# Tool-Specific Instructions\n\n{extracted}"
 
     return f"""You are an autonomous AI agent executing a task using a ReAct (Reasoning-Action-Observation) approach.
 
@@ -154,8 +150,8 @@ You have access to various tools for:
 - Web fetching
 - And more
 
-Use tools strategically to accomplish the task efficiently.{todo_instruction}
-
+Use tools strategically to accomplish the task efficiently.
+{tool_instructions}
 # ⚠️ CRITICAL: How to Complete the Task
 
 **YOU MUST call the `attempt_completion` tool when you finish the task.**
@@ -180,17 +176,26 @@ attempt_completion(result="I completed the task by: 1. Created X, 2. Tested Y, 3
 Your answer will be verified before final completion."""
 
 
-def get_verification_prompt(task: str, answer: str, execution_trace: str = "") -> str:
+def get_verification_prompt(
+    task: str, answer: str, execution_trace: str = "", tools: Optional[list[Any]] = None
+) -> str:
     """Get the prompt for verifying if an answer satisfies the task.
 
     Args:
         task: The original task
         answer: The agent's proposed answer
         execution_trace: Optional trace of actions taken during execution
+        tools: Optional list of tools (for extracting node-specific instructions)
 
     Returns:
         Formatted verification prompt
     """
+    # Extract tool-specific instructions for the verifier node
+    tool_instructions = ""
+    if tools:
+        extracted = _extract_instructions_for_node(tools, "verifier")
+        if extracted:
+            tool_instructions = f"\n\n# Tool-Specific Instructions\n\n{extracted}"
     trace_section = ""
     if execution_trace:
         trace_section = f"""
@@ -232,20 +237,30 @@ VERIFIED: [Brief explanation citing specific evidence from the execution trace]
 **If the task is NOT complete:**
 NOT_VERIFIED: [Specific explanation of what's missing, incorrect, or not evidenced in the trace]
 
-Be objective and thorough in your evaluation. Base your decision on concrete evidence from the execution trace."""
+Be objective and thorough in your evaluation. Base your decision on concrete evidence from the execution trace.
+{tool_instructions}"""
 
 
-def get_replan_prompt(task: str, previous_plan: str, verification_feedback: str) -> str:
+def get_replan_prompt(
+    task: str, previous_plan: str, verification_feedback: str, tools: Optional[list[Any]] = None
+) -> str:
     """Get the prompt for creating a new plan after verification failure.
 
     Args:
         task: The original task
         previous_plan: The plan that was just attempted
         verification_feedback: Feedback from the verification step
+        tools: Optional list of tools (for extracting node-specific instructions)
 
     Returns:
         Formatted replanning prompt
     """
+    # Extract tool-specific instructions for the replan node
+    tool_instructions = ""
+    if tools:
+        extracted = _extract_instructions_for_node(tools, "replan")
+        if extracted:
+            tool_instructions = f"\n\n# Tool-Specific Instructions\n\n{extracted}"
     return f"""You are a meticulous AI agent tasked with creating a NEW implementation plan.
 
 # Original Task
@@ -280,7 +295,7 @@ Use the same plan format as before:
 
 ## Success Criteria
 [How to verify the task is complete]
-
+{tool_instructions}
 Now create the improved implementation plan."""
 
 

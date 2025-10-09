@@ -53,17 +53,25 @@ class Agent:
         self.cwd = cwd
         self.model_name = model_name
         self.max_context_tokens = max_context_tokens
-        self.tools = tools
         self.verbose = verbose
         self.recursion_limit = recursion_limit
         self.model_kwargs = kwargs
+
+        # Normalize tools (wrap plain StructuredTools as AlfredoTools)
+        self.tools: Optional[list[Any]]
+        if tools is not None:
+            from alfredo.tools.alfredo_tool import AlfredoTool
+
+            self.tools = [t if isinstance(t, AlfredoTool) else AlfredoTool.from_langchain(t) for t in tools]
+        else:
+            self.tools = None
 
         # Create the LangGraph
         self.graph = create_agentic_graph(
             cwd=cwd,
             model_name=model_name,
             max_context_tokens=max_context_tokens,
-            tools=tools,
+            tools=self.tools,
             recursion_limit=recursion_limit,
             **kwargs,
         )
@@ -80,23 +88,6 @@ class Agent:
             final_answer, is_verified. Returns None if run() hasn't been called yet.
         """
         return self._results
-
-    def _has_todo_tools(self) -> bool:
-        """Check if todo list tools are present in the tool list.
-
-        Returns:
-            True if write_todo_list or read_todo_list tools are present
-        """
-        if self.tools is None:
-            # Import here to avoid circular import
-            from alfredo.integrations.langchain import create_langchain_tools
-
-            tools = create_langchain_tools(cwd=self.cwd)
-        else:
-            tools = self.tools
-
-        tool_names = {getattr(t, "name", "") for t in tools}
-        return "write_todo_list" in tool_names or "read_todo_list" in tool_names
 
     def _is_mcp_tool(self, tool_name: str) -> bool:
         """Determine if a tool is an MCP tool based on its name.
@@ -131,44 +122,77 @@ class Agent:
         Returns:
             Dictionary with keys: planner, agent, verifier, replan
         """
-        has_todo_tools = self._has_todo_tools()
+        # Get tools (create default set if none configured)
+        if self.tools is None:
+            from alfredo.integrations.langchain import create_alfredo_tools
+            from alfredo.tools.handlers.todo import TODO_SYSTEM_INSTRUCTIONS
+
+            tools = create_alfredo_tools(
+                cwd=self.cwd,
+                tool_configs={
+                    "write_todo_list": TODO_SYSTEM_INSTRUCTIONS,
+                    "read_todo_list": TODO_SYSTEM_INSTRUCTIONS,
+                },
+            )
+        else:
+            tools = self.tools
 
         return {
-            "planner": get_planning_prompt(task=task, has_todo_tools=has_todo_tools),
-            "agent": get_agent_system_prompt(task=task, plan=plan, has_todo_tools=has_todo_tools),
-            "verifier": get_verification_prompt(task=task, answer=answer, execution_trace=""),
-            "replan": get_replan_prompt(task=task, previous_plan=plan, verification_feedback=verification_feedback),
+            "planner": get_planning_prompt(task=task, tools=tools),
+            "agent": get_agent_system_prompt(task=task, plan=plan, tools=tools),
+            "verifier": get_verification_prompt(task=task, answer=answer, execution_trace="", tools=tools),
+            "replan": get_replan_prompt(
+                task=task, previous_plan=plan, verification_feedback=verification_feedback, tools=tools
+            ),
         }
 
     def get_tool_descriptions(self) -> list[dict[str, Any]]:
         """Get descriptions of all tools available to the agent.
 
         Returns:
-            List of dictionaries with keys: name, description, parameters, tool_type
-            where tool_type is either "alfredo" or "mcp"
+            List of dictionaries with keys: name, description, parameters, tool_type, target_nodes
+            where tool_type is either "alfredo" or "mcp", and target_nodes lists graph nodes
+            that have custom instructions for this tool
         """
+        from alfredo.tools.alfredo_tool import AlfredoTool
+
         if self.tools is None:
             # Import here to avoid circular import
-            from alfredo.integrations.langchain import create_langchain_tools
+            from alfredo.integrations.langchain import create_alfredo_tools
+            from alfredo.tools.handlers.todo import TODO_SYSTEM_INSTRUCTIONS
 
-            tools = create_langchain_tools(cwd=self.cwd)
+            tools = create_alfredo_tools(
+                cwd=self.cwd,
+                tool_configs={
+                    "write_todo_list": TODO_SYSTEM_INSTRUCTIONS,
+                    "read_todo_list": TODO_SYSTEM_INSTRUCTIONS,
+                },
+            )
         else:
             tools = self.tools
 
         tool_descriptions = []
 
         for tool in tools:
+            # Get underlying LangChain tool (for compatibility)
+            if isinstance(tool, AlfredoTool):
+                lc_tool = tool.to_langchain_tool()
+                target_nodes = tool.get_target_nodes()
+            else:
+                lc_tool = tool
+                target_nodes = []
+
             # Detect tool type (MCP tools often have prefixes like "bc_", "fs_", etc.)
-            tool_name = getattr(tool, "name", "unknown")
+            tool_name = getattr(lc_tool, "name", "unknown")
             tool_type = "mcp" if self._is_mcp_tool(tool_name) else "alfredo"
 
             # Extract basic info
-            description = getattr(tool, "description", "No description available")
+            description = getattr(lc_tool, "description", "No description available")
 
             # Extract parameters from args_schema
             parameters = []
-            if hasattr(tool, "args_schema") and tool.args_schema is not None:
-                schema = tool.args_schema
+            if hasattr(lc_tool, "args_schema") and lc_tool.args_schema is not None:
+                schema = lc_tool.args_schema
                 if hasattr(schema, "model_fields"):
                     # Pydantic v2
                     for field_name, field_info in schema.model_fields.items():
@@ -193,6 +217,7 @@ class Agent:
                 "description": description,
                 "parameters": parameters,
                 "tool_type": tool_type,
+                "target_nodes": target_nodes,
             })
 
         return tool_descriptions
@@ -221,6 +246,12 @@ class Agent:
             output_lines.append("")
             output_lines.append(f"**Description:** {tool['description']}")
             output_lines.append("")
+
+            # Show target nodes if present
+            if tool.get("target_nodes"):
+                nodes_str = ", ".join(tool["target_nodes"])
+                output_lines.append(f"**Target Nodes:** {nodes_str}")
+                output_lines.append("")
 
             if tool["parameters"]:
                 output_lines.append("**Parameters:**")

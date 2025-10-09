@@ -16,9 +16,32 @@ from alfredo.agentic.nodes import (
 )
 from alfredo.agentic.state import AgentState
 from alfredo.integrations.langchain import create_langchain_tools
+from alfredo.tools.alfredo_tool import AlfredoTool
 
 # Note: We use the existing attempt_completion tool from alfredo.tools.handlers.workflow
 # No need to create a duplicate tool here
+
+
+def _normalize_tools(tools: list[Any]) -> list[AlfredoTool]:
+    """Normalize a list of tools to AlfredoTools.
+
+    Wraps plain LangChain StructuredTools as AlfredoTools without instructions.
+    AlfredoTools are passed through unchanged.
+
+    Args:
+        tools: List of tools (can be AlfredoTool or StructuredTool)
+
+    Returns:
+        List of AlfredoTool instances
+    """
+    normalized = []
+    for tool in tools:
+        if isinstance(tool, AlfredoTool):
+            normalized.append(tool)
+        else:
+            # Wrap plain LangChain tool as AlfredoTool without instructions
+            normalized.append(AlfredoTool.from_langchain(tool))
+    return normalized
 
 
 def should_continue(state: AgentState) -> Literal["tools", "agent"]:
@@ -95,19 +118,6 @@ def verification_router(state: AgentState) -> Literal["__end__", "replan"]:
         return "replan"
 
 
-def _has_todo_tools(tools: list) -> bool:
-    """Check if todo list tools are present in the tool list.
-
-    Args:
-        tools: List of tools
-
-    Returns:
-        True if write_todo_list or read_todo_list tools are present
-    """
-    tool_names = {getattr(t, "name", "") for t in tools}
-    return "write_todo_list" in tool_names or "read_todo_list" in tool_names
-
-
 def create_agentic_graph(
     cwd: str = ".",
     model_name: str = "gpt-4.1-mini",
@@ -141,19 +151,31 @@ def create_agentic_graph(
     if tools is None:
         # Get all Alfredo tools (includes attempt_completion)
         tools = create_langchain_tools(cwd=cwd)
+    else:
+        # Ensure attempt_completion is ALWAYS present (required to exit react loop)
+        tool_names = {getattr(t, "name", "") for t in tools}
+        if "attempt_completion" not in tool_names:
+            # Add attempt_completion tool
+            from alfredo.integrations.langchain import create_langchain_tool
 
-    # Check if todo tools are present
-    has_todo_tools = _has_todo_tools(tools)
+            attempt_completion_tool = create_langchain_tool("attempt_completion", cwd=cwd)
+            tools = [*list(tools), attempt_completion_tool]
+
+    # Normalize tools (wrap plain StructuredTools as AlfredoTools)
+    normalized_tools = _normalize_tools(tools)
+
+    # Extract LangChain tools for model binding
+    langchain_tools = [t.to_langchain_tool() for t in normalized_tools]
 
     # Bind tools to model for agent node
-    model_with_tools = model.bind_tools(tools, tool_choice="auto")
+    model_with_tools = model.bind_tools(langchain_tools, tool_choice="auto")
 
-    # Create nodes
-    planner_node = create_planner_node(model, has_todo_tools=has_todo_tools)
-    agent_node = create_agent_node(model_with_tools, has_todo_tools=has_todo_tools)
-    tools_node = create_tools_node(tools)
-    verifier_node = create_verifier_node(model)
-    replan_node = create_replan_node(model)
+    # Create nodes (pass normalized tools for instruction extraction)
+    planner_node = create_planner_node(model, tools=normalized_tools)
+    agent_node = create_agent_node(model_with_tools, tools=normalized_tools)
+    tools_node = create_tools_node(langchain_tools)
+    verifier_node = create_verifier_node(model, tools=normalized_tools)
+    replan_node = create_replan_node(model, tools=normalized_tools)
 
     # Create state graph
     graph = StateGraph(AgentState)

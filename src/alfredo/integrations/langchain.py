@@ -137,6 +137,7 @@ def create_langchain_tools(
         cwd: Working directory for file operations
         model_family: Model family for tool variant selection
         tool_ids: Optional list of specific tool IDs to convert. If None, converts all tools.
+               Note: attempt_completion is ALWAYS included regardless of tool_ids.
 
     Returns:
         List of LangChain StructuredTool instances
@@ -153,6 +154,10 @@ def create_langchain_tools(
         # Get all tools for the model family
         specs = registry.get_specs_for_variant(model_family)
         tool_ids = [spec.id for spec in specs]
+    else:
+        # Ensure attempt_completion is ALWAYS included (required to exit react loop)
+        if "attempt_completion" not in tool_ids:
+            tool_ids = [*list(tool_ids), "attempt_completion"]
 
     tools = []
     for tool_id in tool_ids:
@@ -221,3 +226,189 @@ def as_langchain_tool(
         return wrapper
 
     return decorator
+
+
+# AlfredoTool creation helpers
+
+
+def create_alfredo_tool(
+    tool_id: str,
+    cwd: Optional[str] = None,
+    system_instructions: Optional[dict[str, str]] = None,
+    metadata: Optional[dict[str, Any]] = None,
+) -> Any:
+    """Create an AlfredoTool from an Alfredo tool ID.
+
+    This is a convenience function that wraps the AlfredoTool.from_alfredo factory method.
+
+    Args:
+        tool_id: The ID of the Alfredo tool (e.g., "read_file", "write_todo_list")
+        cwd: Working directory for file operations
+        system_instructions: Optional node-specific instructions.
+            Example: {"agent": "instruction", "planner": "instruction"}
+        metadata: Optional additional metadata
+
+    Returns:
+        AlfredoTool instance
+
+    Raises:
+        ImportError: If LangChain is not available
+        ValueError: If tool_id is not found in registry
+
+    Example:
+        ```python
+        from alfredo.integrations.langchain import create_alfredo_tool
+
+        tool = create_alfredo_tool(
+            tool_id="write_todo_list",
+            cwd=".",
+            system_instructions={
+                "agent": "Track your progress sequentially",
+                "planner": "Create initial checklist"
+            }
+        )
+        ```
+    """
+    from alfredo.tools.alfredo_tool import AlfredoTool
+
+    return AlfredoTool.from_alfredo(
+        tool_id=tool_id,
+        cwd=cwd,
+        system_instructions=system_instructions,
+        metadata=metadata,
+    )
+
+
+def create_alfredo_tools(
+    cwd: Optional[str] = None,
+    model_family: ModelFamily = ModelFamily.GENERIC,
+    tool_ids: Optional[list[str]] = None,
+    tool_configs: Optional[dict[str, dict[str, str]]] = None,
+) -> list[Any]:
+    """Create multiple AlfredoTools with optional system instructions.
+
+    This function creates Alfredo tools and wraps them as AlfredoTools, optionally
+    adding node-specific system instructions based on tool_configs.
+
+    Args:
+        cwd: Working directory for file operations
+        model_family: Model family for tool variant selection
+        tool_ids: Optional list of specific tool IDs to create. If None, creates all tools.
+            Note: attempt_completion is ALWAYS included regardless of tool_ids.
+        tool_configs: Optional mapping of tool IDs to their system instructions.
+            Example: {
+                "write_todo_list": {
+                    "agent": "Track progress",
+                    "planner": "Create checklist"
+                },
+                "read_file": {
+                    "agent": "Use to read files"
+                }
+            }
+
+    Returns:
+        List of AlfredoTool instances
+
+    Raises:
+        ImportError: If LangChain is not available
+
+    Example:
+        ```python
+        from alfredo.integrations.langchain import create_alfredo_tools
+        from alfredo.tools.handlers.todo import TODO_SYSTEM_INSTRUCTIONS
+
+        # Create all tools
+        tools = create_alfredo_tools(cwd=".")
+
+        # Create specific tools with instructions
+        tools = create_alfredo_tools(
+            cwd=".",
+            tool_ids=["read_file", "write_file", "write_todo_list"],
+            tool_configs={
+                "write_todo_list": TODO_SYSTEM_INSTRUCTIONS
+            }
+        )
+        ```
+    """
+    from alfredo.tools.alfredo_tool import AlfredoTool
+
+    check_langchain_available()
+
+    # Import handlers to ensure they're registered
+    from alfredo.tools.handlers import command, discovery, file_ops, todo, workflow  # noqa: F401
+
+    if tool_ids is None:
+        # Get all tools for the model family
+        specs = registry.get_specs_for_variant(model_family)
+        tool_ids = [spec.id for spec in specs]
+    else:
+        # Ensure attempt_completion is ALWAYS included (required to exit react loop)
+        if "attempt_completion" not in tool_ids:
+            tool_ids = [*list(tool_ids), "attempt_completion"]
+
+    tool_configs = tool_configs or {}
+    tools = []
+
+    for tool_id in tool_ids:
+        try:
+            # Get system instructions for this tool (if configured)
+            system_instructions = tool_configs.get(tool_id)
+
+            # Create as AlfredoTool
+            tool = AlfredoTool.from_alfredo(
+                tool_id=tool_id,
+                cwd=cwd,
+                system_instructions=system_instructions,
+            )
+            tools.append(tool)
+        except ValueError as e:
+            # Skip tools that don't exist
+            print(f"Warning: {e}")
+            continue
+
+    return tools
+
+
+def wrap_langchain_tool(
+    tool: StructuredTool,
+    system_instructions: Optional[dict[str, str]] = None,
+    metadata: Optional[dict[str, Any]] = None,
+) -> Any:
+    """Wrap a LangChain StructuredTool as an AlfredoTool.
+
+    Args:
+        tool: The LangChain StructuredTool to wrap
+        system_instructions: Optional node-specific instructions
+        metadata: Optional additional metadata
+
+    Returns:
+        AlfredoTool instance
+
+    Example:
+        ```python
+        from langchain_core.tools import StructuredTool
+        from alfredo.integrations.langchain import wrap_langchain_tool
+
+        # Create a custom LangChain tool
+        custom_tool = StructuredTool.from_function(
+            func=my_function,
+            name="my_tool",
+            description="My custom tool"
+        )
+
+        # Wrap it as AlfredoTool with instructions
+        alfredo_tool = wrap_langchain_tool(
+            custom_tool,
+            system_instructions={
+                "agent": "Use this carefully"
+            }
+        )
+        ```
+    """
+    from alfredo.tools.alfredo_tool import AlfredoTool
+
+    return AlfredoTool.from_langchain(
+        langchain_tool=tool,
+        system_instructions=system_instructions,
+        metadata=metadata,
+    )

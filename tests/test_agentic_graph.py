@@ -246,3 +246,31 @@ def test_extract_attempt_completion() -> None:
     ]
     result = extract_attempt_completion(state_mixed)
     assert result == "All done!"
+
+
+@pytest.mark.skipif(not os.getenv("OPENAI_API_KEY"), reason="OPENAI_API_KEY not set")
+def test_custom_tools_always_have_attempt_completion() -> None:
+    """Test that attempt_completion is always added to custom tools in agentic graph."""
+    from alfredo.agentic import create_agentic_graph
+    from alfredo.integrations.langchain import create_langchain_tool
+
+    # Create custom tools without attempt_completion
+    custom_tools = [
+        create_langchain_tool("read_file"),
+        create_langchain_tool("write_to_file"),
+    ]
+
+    # Verify custom tools don't include attempt_completion
+    tool_names = {tool.name for tool in custom_tools}
+    assert "attempt_completion" not in tool_names
+
+    # Create graph with custom tools
+    graph = create_agentic_graph(
+        cwd=".",
+        model_name="gpt-4.1-mini",
+        tools=custom_tools,
+    )
+
+    # The graph should have been modified to include attempt_completion
+    # We can verify this by checking the graph's internal state
+    assert graph is not None

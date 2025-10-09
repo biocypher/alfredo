@@ -320,3 +320,74 @@ def load_combined_tools_sync(
     import asyncio
 
     return asyncio.run(load_combined_tools(cwd, model_family, mcp_server_configs, alfredo_tool_ids, make_sync))
+
+
+# AlfredoTool wrapping helpers for MCP tools
+
+
+def wrap_mcp_tools(
+    mcp_tools: list[Any],
+    instruction_configs: Optional[dict[str, dict[str, str]]] = None,
+) -> list[Any]:
+    """Wrap MCP tools as AlfredoTools with optional system instructions.
+
+    This function takes a list of MCP StructuredTools and wraps them as AlfredoTools,
+    optionally adding node-specific system instructions.
+
+    Args:
+        mcp_tools: List of MCP StructuredTools (from load_mcp_tools or load_mcp_tools_sync)
+        instruction_configs: Optional mapping of tool names to their system instructions.
+            Example: {
+                "mcp_tool_name": {
+                    "agent": "Use this for external operations",
+                    "verifier": "Check results with this"
+                }
+            }
+
+    Returns:
+        List of AlfredoTool instances
+
+    Example:
+        ```python
+        from alfredo.integrations.mcp import load_mcp_tools_sync, wrap_mcp_tools
+
+        # Load MCP tools
+        server_configs = {
+            "filesystem": {
+                "command": "npx",
+                "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
+                "transport": "stdio"
+            }
+        }
+        mcp_tools = load_mcp_tools_sync(server_configs)
+
+        # Wrap with instructions
+        wrapped_tools = wrap_mcp_tools(
+            mcp_tools,
+            instruction_configs={
+                "read_file": {
+                    "agent": "Use for external file reading"
+                },
+                "write_file": {
+                    "agent": "Use for external file writing"
+                }
+            }
+        )
+        ```
+    """
+    from alfredo.tools.alfredo_tool import AlfredoTool
+
+    instruction_configs = instruction_configs or {}
+    wrapped = []
+
+    for tool in mcp_tools:
+        tool_name = getattr(tool, "name", "")
+        system_instructions = instruction_configs.get(tool_name)
+
+        wrapped_tool = AlfredoTool.from_mcp(
+            mcp_tool=tool,
+            system_instructions=system_instructions,
+        )
+        wrapped.append(wrapped_tool)
+
+    return wrapped

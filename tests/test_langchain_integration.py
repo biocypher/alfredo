@@ -137,14 +137,19 @@ def test_langchain_tool_error_handling() -> None:
 
 @pytest.mark.skipif(not LANGCHAIN_AVAILABLE, reason="LangChain not installed")
 def test_specific_tools_conversion() -> None:
-    """Test converting specific tools only."""
+    """Test converting specific tools only.
+
+    Note: attempt_completion is always auto-added to ensure agent can exit react loop.
+    """
     tool_ids = ["read_file", "write_to_file"]
     tools = create_langchain_tools(tool_ids=tool_ids)
 
-    assert len(tools) == 2
+    # Now expects 3 tools: read_file, write_to_file, and auto-added attempt_completion
+    assert len(tools) == 3
     tool_names = [tool.name for tool in tools]
     assert "read_file" in tool_names
     assert "write_to_file" in tool_names
+    assert "attempt_completion" in tool_names  # Auto-added
 
 
 @pytest.mark.skipif(not LANGCHAIN_AVAILABLE, reason="LangChain not installed")
@@ -208,3 +213,42 @@ def test_new_tools_in_all_tools_list() -> None:
     # Check new tools are present
     assert "list_code_definition_names" in tool_names
     assert "web_fetch" in tool_names
+
+
+@pytest.mark.skipif(not LANGCHAIN_AVAILABLE, reason="LangChain not installed")
+def test_attempt_completion_always_included_with_all_tools() -> None:
+    """Test that attempt_completion is always included when getting all tools."""
+    tools = create_langchain_tools()
+
+    tool_names = [tool.name for tool in tools]
+
+    # attempt_completion must be present
+    assert "attempt_completion" in tool_names, "attempt_completion must be included in default tools"
+
+
+@pytest.mark.skipif(not LANGCHAIN_AVAILABLE, reason="LangChain not installed")
+def test_attempt_completion_always_included_with_custom_tools() -> None:
+    """Test that attempt_completion is always included even with custom tool list."""
+    # Request only specific tools (excluding attempt_completion)
+    tool_ids = ["read_file", "write_to_file"]
+    tools = create_langchain_tools(tool_ids=tool_ids)
+
+    tool_names = [tool.name for tool in tools]
+
+    # attempt_completion must be auto-added
+    assert "attempt_completion" in tool_names, "attempt_completion must be auto-added to custom tool lists"
+    assert "read_file" in tool_names
+    assert "write_to_file" in tool_names
+
+
+@pytest.mark.skipif(not LANGCHAIN_AVAILABLE, reason="LangChain not installed")
+def test_attempt_completion_not_duplicated() -> None:
+    """Test that attempt_completion is not duplicated if explicitly included."""
+    # Request tools including attempt_completion
+    tool_ids = ["read_file", "attempt_completion"]
+    tools = create_langchain_tools(tool_ids=tool_ids)
+
+    tool_names = [tool.name for tool in tools]
+
+    # Should appear exactly once
+    assert tool_names.count("attempt_completion") == 1, "attempt_completion should appear exactly once"
