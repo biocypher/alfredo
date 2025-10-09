@@ -20,6 +20,9 @@ class ReadFileHandler(BaseToolHandler):
 
         Args:
             params: Must contain 'path' - the file path to read
+                   Optional: 'offset' - line number to start from (0-indexed)
+                   Optional: 'limit' - maximum number of lines to read
+                   Optional: 'limit_bytes' - maximum number of bytes to read
 
         Returns:
             ToolResult with file contents or error
@@ -34,12 +37,24 @@ class ReadFileHandler(BaseToolHandler):
             if not file_path.is_file():
                 return ToolResult.err(f"Path is not a file: {self.get_relative_path(file_path)}")
 
+            # Parse and validate parameters
+            result = self._parse_and_validate_params(params)
+            if isinstance(result, ToolResult):
+                return result
+            offset, limit, limit_bytes = result
+
             # Read file contents
             try:
                 content = file_path.read_text(encoding="utf-8")
-                return ToolResult.ok(content)
+
+                # Handle byte-based limit
+                if limit_bytes is not None:
+                    return self._read_with_byte_limit(content, limit_bytes)
+
+                # Handle line-based limit
+                return self._read_with_line_limit(content, offset, limit, file_path)
+
             except UnicodeDecodeError:
-                # Try reading as binary and return a message
                 size = file_path.stat().st_size
                 return ToolResult.err(f"File appears to be binary (size: {size} bytes). Cannot read as text.")
 
@@ -47,6 +62,131 @@ class ReadFileHandler(BaseToolHandler):
             return ToolResult.err(str(e))
         except Exception as e:
             return ToolResult.err(f"Error reading file: {e}")
+
+    def _parse_and_validate_params(self, params: dict[str, Any]) -> ToolResult | tuple[int, int | None, int | None]:
+        """Parse and validate offset, limit, and limit_bytes parameters.
+
+        Returns:
+            Either a ToolResult (error) or tuple of (offset, limit, limit_bytes)
+        """
+        limit = params.get("limit")
+        limit_bytes = params.get("limit_bytes")
+
+        # Check for mutually exclusive parameters
+        if limit is not None and limit_bytes is not None:
+            return ToolResult.err("Cannot use both 'limit' and 'limit_bytes' parameters")
+
+        # Parse each parameter
+        offset_result = self._parse_int_param(params.get("offset"), "offset", default=0, allow_zero=True)
+        if isinstance(offset_result, ToolResult):
+            return offset_result
+        # offset_result is guaranteed to be int (default=0)
+        offset = offset_result if offset_result is not None else 0
+
+        limit_result = self._parse_int_param(limit, "limit", allow_zero=False) if limit else None
+        if isinstance(limit_result, ToolResult):
+            return limit_result
+
+        limit_bytes_result = (
+            self._parse_int_param(limit_bytes, "limit_bytes", allow_zero=False) if limit_bytes else None
+        )
+        if isinstance(limit_bytes_result, ToolResult):
+            return limit_bytes_result
+
+        return offset, limit_result, limit_bytes_result
+
+    def _parse_int_param(
+        self, value: Any, name: str, default: int | None = None, allow_zero: bool = False
+    ) -> ToolResult | int | None:
+        """Parse and validate an integer parameter.
+
+        Args:
+            value: Parameter value to parse
+            name: Parameter name for error messages
+            default: Default value if None
+            allow_zero: Whether zero is allowed
+
+        Returns:
+            Either a ToolResult (error) or the parsed integer
+        """
+        if value is None:
+            return default
+
+        try:
+            parsed = int(value)
+        except ValueError:
+            return ToolResult.err(f"Invalid {name} value: {value}")
+        else:
+            if allow_zero:
+                if parsed < 0:
+                    return ToolResult.err(f"{name.capitalize()} must be non-negative")
+            elif parsed <= 0:
+                return ToolResult.err(f"{name.capitalize()} must be positive")
+            return parsed
+
+    def _read_with_byte_limit(self, content: str, limit_bytes: int) -> ToolResult:
+        """Read file with byte limit.
+
+        Args:
+            content: Full file content
+            limit_bytes: Maximum bytes to read
+
+        Returns:
+            ToolResult with limited content
+        """
+        total_size = len(content.encode("utf-8"))
+
+        if limit_bytes >= total_size:
+            return ToolResult.ok(content)
+
+        # Truncate at byte boundary, being careful with UTF-8
+        byte_content = content.encode("utf-8")[:limit_bytes]
+        try:
+            result_content = byte_content.decode("utf-8")
+        except UnicodeDecodeError:
+            # Truncation split a multi-byte character
+            result_content = byte_content[:-1].decode("utf-8", errors="ignore")
+
+        # Add metadata
+        actual_bytes = len(result_content.encode("utf-8"))
+        metadata = f"[Showing first {actual_bytes} bytes of {total_size} total bytes]\n\n"
+        return ToolResult.ok(metadata + result_content)
+
+    def _read_with_line_limit(self, content: str, offset: int, limit: int | None, file_path: Any) -> ToolResult:
+        """Read file with line-based offset and limit.
+
+        Args:
+            content: Full file content
+            offset: Line offset (0-indexed)
+            limit: Maximum lines to read
+            file_path: Path object for error messages
+
+        Returns:
+            ToolResult with limited content
+        """
+        lines = content.splitlines(keepends=True)
+        total_lines = len(lines)
+
+        # Validate offset
+        if offset >= total_lines:
+            return ToolResult.err(
+                f"Offset {offset} exceeds total lines ({total_lines}) in file: {self.get_relative_path(file_path)}"
+            )
+
+        # Calculate line range
+        end_line = (offset + limit) if limit else total_lines
+        selected_lines = lines[offset:end_line]
+        actual_end = min(end_line, total_lines)
+
+        # Reconstruct content
+        result_content = "".join(selected_lines)
+
+        # Add metadata if partial read
+        if offset > 0 or limit is not None:
+            metadata = f"[Showing lines {offset + 1}-{actual_end} of {total_lines} total lines]\n\n"
+            result_content = metadata + result_content
+
+        return ToolResult.ok(result_content)
 
 
 class WriteFileHandler(BaseToolHandler):
@@ -205,7 +345,9 @@ _read_file_spec = ToolSpec(
     name="read_file",
     description=(
         "Request to read the contents of a file at the specified path. "
-        "Use this when you need to examine the contents of an existing file."
+        "Use this when you need to examine the contents of an existing file. "
+        "For large files, you can use limit_bytes to read only the first N bytes/KB, "
+        "or use offset and limit to read a specific range of lines."
     ),
     variant=ModelFamily.GENERIC,
     parameters=[
@@ -214,6 +356,39 @@ _read_file_spec = ToolSpec(
             required=True,
             instruction="The path of the file to read (relative to the current working directory)",
             usage="path/to/file.txt",
+        ),
+        ToolParameter(
+            name="offset",
+            required=False,
+            instruction=(
+                "Line number to start reading from (0-indexed). "
+                "Use this to skip the first N lines of a file. "
+                "Defaults to 0 (start from beginning). "
+                "Cannot be used with limit_bytes."
+            ),
+            usage="100",
+        ),
+        ToolParameter(
+            name="limit",
+            required=False,
+            instruction=(
+                "Maximum number of lines to read from the offset position. "
+                "Use this to peek at large files without reading the entire content. "
+                "If not specified, reads until the end of the file. "
+                "Cannot be used with limit_bytes."
+            ),
+            usage="50",
+        ),
+        ToolParameter(
+            name="limit_bytes",
+            required=False,
+            instruction=(
+                "Maximum number of bytes to read from the beginning of the file. "
+                "Use this to preview large files by size (e.g., 50000 for 50KB). "
+                "Handles UTF-8 encoding safely. "
+                "Cannot be used with offset or limit."
+            ),
+            usage="51200",
         ),
     ],
 )

@@ -24,6 +24,14 @@ try:
 except ImportError:
     pass  # LangGraph not installed
 
+# Pre-built agents (requires agentic scaffold)
+try:
+    from alfredo.prebuilt import ExplorationAgent  # noqa: F401
+
+    __all__.extend(["ExplorationAgent"])
+except ImportError:
+    pass  # LangGraph not installed or prebuilt module not available
+
 # Optional OpenAI integration (if openai is installed)
 try:
     from alfredo.integrations.openai_native import (  # noqa: F401

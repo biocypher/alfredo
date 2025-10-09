@@ -536,6 +536,142 @@ Use this when:
 - You're building custom tool calling loops
 - You need minimal dependencies
 
+## Pre-built Agents
+
+Alfredo provides pre-built specialized agents for common tasks. These agents wrap the base `Agent` class with custom prompts and configurations optimized for specific use cases.
+
+### ExplorationAgent
+
+The `ExplorationAgent` explores directories and generates comprehensive markdown reports about their contents. It features:
+
+- **Smart file size handling** - Automatically adjusts reading strategy based on file size
+- **Data file analysis** - Generates pandas analysis for CSV, Excel, Parquet, HDF5, JSON files
+- **Categorization** - Groups files by type (code, data, config, docs, binary)
+- **Context steering** - Use prompts to focus exploration on specific aspects
+- **Configurable thresholds** - Customize size limits and preview line counts
+
+#### Basic Usage
+
+```python
+from alfredo import ExplorationAgent
+
+# Basic exploration
+agent = ExplorationAgent(
+    cwd="./my_project",
+    output_path="./reports/project_overview.md"
+)
+report = agent.explore()
+print(report)
+```
+
+#### With Context Steering
+
+```python
+# Focus exploration with context prompt
+agent = ExplorationAgent(
+    cwd="./data_pipeline",
+    context_prompt=(
+        "Focus on data schemas, transformations, and quality checks. "
+        "Note any data validation logic and preprocessing steps."
+    ),
+    model_name="gpt-4.1-mini"
+)
+report = agent.explore()
+```
+
+#### Advanced Configuration
+
+```python
+agent = ExplorationAgent(
+    cwd="./large_project",
+    context_prompt="Focus on API endpoints and authentication mechanisms",
+    max_file_size_bytes=50_000,  # More aggressive size limit (50KB)
+    preview_kb=25,  # Preview first 25KB for large files
+    output_path="./reports/api_exploration.md",
+    model_name="gpt-4o-mini",
+    verbose=True
+)
+report = agent.explore()
+
+# View execution trace
+agent.display_trace()
+
+# Alternative: Use line-based preview instead of KB
+agent2 = ExplorationAgent(
+    cwd="./code_project",
+    preview_lines=100,  # Preview first 100 lines for large files
+    verbose=True
+)
+report2 = agent2.explore()
+```
+
+#### How It Works
+
+The ExplorationAgent:
+
+1. **Lists files recursively** to understand directory structure
+2. **Categorizes files** by type (source code, data, config, docs, binary)
+3. **Smart reading**:
+   - Small files (<10KB): Reads fully
+   - Medium files (10KB-100KB): Reads with `limit` parameter (first 100 lines)
+   - Large files (>100KB): Peeks at first 50 lines
+   - Very large files (>1MB): Just notes metadata
+4. **Data analysis**: For CSV, Excel, Parquet, HDF5, JSON files:
+   - Writes Python analysis script with pandas
+   - Executes script using `execute_command` tool
+   - Captures shape, columns, dtypes, head(), describe(), missing values
+5. **Generates markdown report** with structure:
+   - Overview (file counts, sizes)
+   - Directory structure
+   - Files by category
+   - Data analysis results
+   - Summary insights
+
+#### Supported Data Formats
+
+- **CSV/TSV** - Analyzed with `pandas.read_csv()`
+- **Excel** (.xlsx, .xls) - Analyzed with `pandas.read_excel()`
+- **Parquet** - Analyzed with `pandas.read_parquet()`
+- **HDF5** (.h5, .hdf5) - Analyzed with `pandas.read_hdf()`
+- **JSON/JSONL** - Analyzed with `pandas.read_json()`
+- **Feather** - Analyzed with `pandas.read_feather()`
+
+#### Configuration Options
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `cwd` | `"."` | Directory to explore |
+| `context_prompt` | `None` | Optional context to steer exploration focus |
+| `model_name` | `"gpt-4.1-mini"` | Model to use for exploration |
+| `max_file_size_bytes` | `100_000` | Threshold for limited reading (100KB) |
+| `preview_kb` | `50`* | Size in KB to preview for large files |
+| `preview_lines` | `None` | Number of lines to preview (alternative to preview_kb) |
+| `output_path` | `None` | Report save path (default: `notes/exploration_report.md`) |
+| `verbose` | `True` | Print progress updates |
+
+*Default is 50KB when neither `preview_kb` nor `preview_lines` is specified
+
+#### Example Run
+
+```bash
+# Run the exploration example
+uv run python examples/prebuilt_explore_example.py
+```
+
+#### Dependencies
+
+The ExplorationAgent requires:
+- `alfredo[agentic]` - LangGraph and agentic scaffold
+- `pandas` - For data file analysis (recommended)
+- `openpyxl` - For Excel file support (optional)
+- `pyarrow` - For Parquet file support (optional)
+- `h5py` or `tables` - For HDF5 file support (optional)
+
+```bash
+# Install with data analysis support
+uv add alfredo[agentic] pandas openpyxl pyarrow h5py
+```
+
 ## Core Architecture
 
 ### Tools System
@@ -544,6 +680,9 @@ The core tool system allows AI agents to interact with the environment through a
 
 **Tool Categories:**
 - **File Operations** (`file_ops.py`) - Read, write, diff-based edits
+  - `read_file` - Read files with optional `offset` and `limit` parameters for partial reading
+  - `write_to_file` - Create or overwrite files
+  - `replace_in_file` - Apply search/replace diffs
 - **Command Execution** (`command.py`) - Shell commands with timeout control
 - **File Discovery** (`discovery.py`) - List directories, search with regex
 - **Code Analysis** (`code_analysis.py`) - List code definitions using tree-sitter
@@ -701,6 +840,9 @@ uv run python examples/langchain_integration.py
 
 # Agentic scaffold (plan-verify-replan)
 uv run python examples/agentic_example.py
+
+# Pre-built exploration agent
+uv run python examples/prebuilt_explore_example.py
 
 # Web fetch examples
 uv run python examples/web_fetch_simple.py
