@@ -29,6 +29,7 @@ def test_agent_state() -> None:
         "max_context_tokens": 100000,
         "final_answer": None,
         "is_verified": False,
+        "todo_list": None,
     }
 
     assert state["task"] == "Test task"

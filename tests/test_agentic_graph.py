@@ -71,6 +71,7 @@ def test_should_continue_function() -> None:
         "max_context_tokens": 100000,
         "final_answer": None,
         "is_verified": False,
+        "todo_list": None,
     }
     result = should_continue(state)
     assert result == "agent"
@@ -115,6 +116,7 @@ def test_verification_router() -> None:
         "max_context_tokens": 100000,
         "final_answer": "Answer",
         "is_verified": True,
+        "todo_list": None,
     }
     result = verification_router(verified_state)
     assert result == "__end__"
@@ -128,6 +130,7 @@ def test_verification_router() -> None:
         "max_context_tokens": 100000,
         "final_answer": "Answer",
         "is_verified": False,
+        "todo_list": None,
     }
     result = verification_router(not_verified_state)
     assert result == "replan"
@@ -188,6 +191,7 @@ def test_extract_attempt_completion() -> None:
         "max_context_tokens": 100000,
         "final_answer": None,
         "is_verified": False,
+        "todo_list": None,
     }
     result = extract_attempt_completion(state)
     assert result == ""

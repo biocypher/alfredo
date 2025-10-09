@@ -75,14 +75,10 @@ def test_agent_get_tool_descriptions() -> None:
 
 @pytest.mark.skipif(not os.getenv("OPENAI_API_KEY"), reason="OPENAI_API_KEY not set")
 def test_agent_has_todo_tools() -> None:
-    """Test that _has_todo_tools detects todo tools correctly."""
+    """Test that todo tools are present by default."""
     from alfredo import Agent
 
     agent = Agent(cwd=".", model_name="gpt-4.1-mini", verbose=False)
-
-    # By default, all tools should be loaded, including todo tools
-    has_todo = agent._has_todo_tools()
-    assert isinstance(has_todo, bool)
 
     # Check that todo tools are actually present
     tool_descriptions = agent.get_tool_descriptions()
@@ -90,7 +86,8 @@ def test_agent_has_todo_tools() -> None:
     has_write_todo = "write_todo_list" in tool_names
     has_read_todo = "read_todo_list" in tool_names
 
-    assert has_todo == (has_write_todo or has_read_todo)
+    # By default, all tools should be loaded, including todo tools
+    assert has_write_todo or has_read_todo
 
 
 @pytest.mark.skipif(not os.getenv("OPENAI_API_KEY"), reason="OPENAI_API_KEY not set")
@@ -179,8 +176,8 @@ def test_get_system_prompts_without_api_key() -> None:
     )
 
     # Test that prompts can be generated
-    planner = get_planning_prompt(task="Test task", has_todo_tools=False)
-    agent = get_agent_system_prompt(task="Test task", plan="Test plan", has_todo_tools=False)
+    planner = get_planning_prompt(task="Test task", tools=None)
+    agent = get_agent_system_prompt(task="Test task", plan="Test plan", tools=None)
     verifier = get_verification_prompt(task="Test task", answer="Test answer")
     replan = get_replan_prompt(task="Test task", previous_plan="Old plan", verification_feedback="Feedback")
 
