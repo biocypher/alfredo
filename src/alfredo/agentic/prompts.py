@@ -235,14 +235,19 @@ def get_agent_system_prompt(
         )
 
     # Default built-in prompt
+    # Conditionally include plan section if plan is provided
+    plan_section = ""
+    if plan and plan.strip():
+        plan_section = f"""
+# Implementation Plan
+{plan}
+"""
+
     return f"""You are an autonomous AI agent executing a task using a ReAct (Reasoning-Action-Observation) approach.
 
 # Original Task
 {task}
-
-# Implementation Plan
-{plan}
-
+{plan_section}
 # Your Role
 
 You will iterate through a think-act-observe loop:
@@ -251,8 +256,7 @@ You will iterate through a think-act-observe loop:
 3. **Observe**: Examine tool results and update your understanding
 
 # Important Rules
-
-- Follow the implementation plan, but adapt if you discover new information
+{"- Follow the implementation plan, but adapt if you discover new information" if plan and plan.strip() else "- Break down the task into logical steps and work through them systematically"}
 - Use ONE tool call per message - you'll see the result before proceeding
 - Think step-by-step and be methodical
 - Be specific in your reasoning and actions

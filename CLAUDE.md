@@ -318,7 +318,7 @@ Alfredo provides a layered architecture with multiple usage patterns to fit diff
 ### Primary Usage: Agent Class (Recommended)
 
 **For most users, the `Agent` class is the recommended approach.** It provides:
-- Automatic planning and replanning
+- Automatic planning and replanning (optional)
 - Verification of task completion
 - Sophisticated tool orchestration
 - Support for any LLM provider (OpenAI, Anthropic, etc.)
@@ -328,7 +328,7 @@ Alfredo provides a layered architecture with multiple usage patterns to fit diff
 ```python
 from alfredo import Agent
 
-# Create an agent
+# Create an agent with planning (default)
 agent = Agent(
     cwd=".",
     model_name="gpt-4.1-mini",
@@ -344,6 +344,39 @@ agent.display_trace()
 # Access results
 print(agent.results["final_answer"])
 ```
+
+#### Planning Options
+
+By default, the Agent uses a **plan-verify-replan** loop:
+1. **Planner** creates an implementation plan
+2. **Agent** executes the plan using tools
+3. **Verifier** checks if task is complete
+4. **Replan** creates improved plan if verification fails
+
+You can disable planning to start execution directly:
+
+```python
+# Create an agent without planning
+agent = Agent(
+    cwd=".",
+    model_name="gpt-4.1-mini",
+    enable_planning=False,  # Skip planner node
+    verbose=True
+)
+
+# Agent starts directly with ReAct loop
+agent.run("Create a hello world Python script")
+```
+
+**When to disable planning:**
+- Simple, straightforward tasks
+- When you want faster startup (no planning overhead)
+- When you prefer the agent to explore freely without a predefined plan
+- For interactive tasks where planning may be overly rigid
+
+**Graph flow:**
+- With planning (default): `START → planner → agent ⇄ tools → verifier → replan → agent`
+- Without planning: `START → agent ⇄ tools → verifier → END`
 
 The Agent class uses LangChain to automatically convert Alfredo tools to the native format of any LLM provider (OpenAI's function calling, Anthropic's tool use, etc.).
 

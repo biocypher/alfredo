@@ -36,6 +36,7 @@ class Agent:
         tools: Optional[list] = None,
         verbose: bool = True,
         recursion_limit: int = 50,
+        enable_planning: bool = True,
         **kwargs: Any,
     ) -> None:
         """Initialize the agentic agent.
@@ -48,6 +49,8 @@ class Agent:
                 Can include MCP tools loaded via alfredo.integrations.mcp
             verbose: Whether to print progress updates during execution
             recursion_limit: Maximum number of graph steps (default: 50)
+            enable_planning: Whether to use the planner node for creating implementation plans.
+                If False, agent starts directly without planning step (default: True)
             **kwargs: Additional keyword arguments to pass to the model
                 (e.g., temperature, base_url, api_key)
         """
@@ -56,6 +59,7 @@ class Agent:
         self.max_context_tokens = max_context_tokens
         self.verbose = verbose
         self.recursion_limit = recursion_limit
+        self.enable_planning = enable_planning
         self.model_kwargs = kwargs
 
         # Normalize tools (wrap plain StructuredTools as AlfredoTools)
@@ -77,6 +81,7 @@ class Agent:
             max_context_tokens=max_context_tokens,
             tools=self.tools,
             recursion_limit=recursion_limit,
+            enable_planning=enable_planning,
             prompt_templates=self.prompt_templates,
             **kwargs,
         )
@@ -483,6 +488,7 @@ class Agent:
             max_context_tokens=self.max_context_tokens,
             tools=self.tools,
             recursion_limit=self.recursion_limit,
+            enable_planning=self.enable_planning,
             prompt_templates=self.prompt_templates,
             **self.model_kwargs,
         )

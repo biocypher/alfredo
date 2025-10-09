@@ -125,6 +125,7 @@ def create_agentic_graph(
     max_context_tokens: int = 100000,
     tools: Optional[list] = None,
     recursion_limit: int = 50,
+    enable_planning: bool = True,
     prompt_templates: Optional[PromptTemplates] = None,
     **kwargs: Any,
 ) -> Any:
@@ -136,6 +137,7 @@ def create_agentic_graph(
         max_context_tokens: Maximum context window size in tokens
         tools: Optional list of tools. If None, uses all Alfredo tools.
         recursion_limit: Maximum number of graph steps before raising an error (default: 50)
+        enable_planning: Whether to use the planner node. If False, starts directly at agent node (default: True)
         prompt_templates: Optional custom prompt templates for each node
         **kwargs: Additional keyword arguments to pass to the model
 
@@ -180,25 +182,33 @@ def create_agentic_graph(
     replan_template = prompt_templates.replan if prompt_templates else None
 
     # Create nodes (pass normalized tools and templates)
-    planner_node = create_planner_node(model, tools=normalized_tools, template=planner_template)
     agent_node = create_agent_node(model_with_tools, tools=normalized_tools, template=agent_template)
     tools_node = create_tools_node(langchain_tools)
     verifier_node = create_verifier_node(model, tools=normalized_tools, template=verifier_template)
-    replan_node = create_replan_node(model, tools=normalized_tools, template=replan_template)
+
+    # Conditionally create planner and replan nodes
+    if enable_planning:
+        planner_node = create_planner_node(model, tools=normalized_tools, template=planner_template)
+        replan_node = create_replan_node(model, tools=normalized_tools, template=replan_template)
 
     # Create state graph
     graph = StateGraph(AgentState)
 
-    # Add nodes
-    graph.add_node("planner", planner_node)
+    # Add nodes - planner and replan are optional
+    if enable_planning:
+        graph.add_node("planner", planner_node)
     graph.add_node("agent", agent_node)
     graph.add_node("tools", tools_node)
     graph.add_node("verifier", verifier_node)
-    graph.add_node("replan", replan_node)
+    if enable_planning:
+        graph.add_node("replan", replan_node)
 
-    # Add edges
-    graph.add_edge(START, "planner")
-    graph.add_edge("planner", "agent")
+    # Add edges - conditional based on enable_planning
+    if enable_planning:
+        graph.add_edge(START, "planner")
+        graph.add_edge("planner", "agent")
+    else:
+        graph.add_edge(START, "agent")
 
     # Conditional edge from agent (routes to tools or continues thinking)
     graph.add_conditional_edges(
@@ -220,18 +230,21 @@ def create_agentic_graph(
         },
     )
 
-    # Conditional edge from verifier
-    graph.add_conditional_edges(
-        "verifier",
-        verification_router,
-        {
-            "__end__": END,
-            "replan": "replan",
-        },
-    )
-
-    # Edge from replan back to agent
-    graph.add_edge("replan", "agent")
+    # Conditional edge from verifier - behavior depends on enable_planning
+    if enable_planning:
+        graph.add_conditional_edges(
+            "verifier",
+            verification_router,
+            {
+                "__end__": END,
+                "replan": "replan",
+            },
+        )
+        # Edge from replan back to agent
+        graph.add_edge("replan", "agent")
+    else:
+        # Without planning, verification failure goes to END (no retry)
+        graph.add_edge("verifier", END)
 
     # Compile and return
     return graph.compile()
@@ -245,6 +258,7 @@ def run_agentic_task(
     verbose: bool = True,
     tools: Optional[list] = None,
     recursion_limit: int = 50,
+    enable_planning: bool = True,
     **kwargs: Any,
 ) -> dict[str, Any]:
     """Run an agentic task from start to finish.
@@ -261,6 +275,7 @@ def run_agentic_task(
         tools: Optional list of LangChain tools. If None, uses all Alfredo tools.
             Can include MCP tools loaded via alfredo.integrations.mcp
         recursion_limit: Maximum number of graph steps (default: 50)
+        enable_planning: Whether to use the planner node. If False, starts directly at agent (default: True)
         **kwargs: Additional keyword arguments to pass to the model
 
     Returns:
@@ -281,6 +296,7 @@ def run_agentic_task(
         tools=tools,
         verbose=verbose,
         recursion_limit=recursion_limit,
+        enable_planning=enable_planning,
         **kwargs,
     )
 

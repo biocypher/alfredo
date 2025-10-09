@@ -278,3 +278,78 @@ def test_custom_tools_always_have_attempt_completion() -> None:
     # The graph should have been modified to include attempt_completion
     # We can verify this by checking the graph's internal state
     assert graph is not None
+
+
+@pytest.mark.skipif(not os.getenv("OPENAI_API_KEY"), reason="OPENAI_API_KEY not set")
+def test_graph_without_planning() -> None:
+    """Test that graph can be created without planner and replan nodes."""
+    from alfredo.agentic import create_agentic_graph
+
+    # Create graph with planning disabled
+    graph = create_agentic_graph(
+        cwd=".",
+        model_name="gpt-4.1-mini",
+        enable_planning=False,
+    )
+
+    assert graph is not None
+
+    # Get the graph structure
+    nodes = graph.get_graph().nodes
+    node_names = {name for name in nodes if not name.startswith("__")}
+
+    # Should have agent, tools, and verifier, but NOT planner or replan
+    assert "agent" in node_names
+    assert "tools" in node_names
+    assert "verifier" in node_names
+    assert "planner" not in node_names
+    assert "replan" not in node_names
+
+
+@pytest.mark.skipif(not os.getenv("OPENAI_API_KEY"), reason="OPENAI_API_KEY not set")
+def test_graph_with_planning_has_all_nodes() -> None:
+    """Test that graph with planning enabled has all nodes."""
+    from alfredo.agentic import create_agentic_graph
+
+    # Create graph with planning enabled (default)
+    graph = create_agentic_graph(
+        cwd=".",
+        model_name="gpt-4.1-mini",
+        enable_planning=True,
+    )
+
+    assert graph is not None
+
+    # Get the graph structure
+    nodes = graph.get_graph().nodes
+    node_names = {name for name in nodes if not name.startswith("__")}
+
+    # Should have all nodes including planner and replan
+    expected_nodes = {"planner", "agent", "tools", "verifier", "replan"}
+    assert expected_nodes.issubset(node_names)
+
+
+def test_agent_system_prompt_without_plan() -> None:
+    """Test that agent system prompt handles empty plan gracefully."""
+    from alfredo.agentic.prompts import get_agent_system_prompt
+
+    task = "Create a Python script"
+
+    # Test with empty plan
+    prompt_no_plan = get_agent_system_prompt(task, plan="")
+    assert task in prompt_no_plan
+    assert "Implementation Plan" not in prompt_no_plan
+    assert "Break down the task into logical steps" in prompt_no_plan
+
+    # Test with None plan
+    prompt_none_plan = get_agent_system_prompt(task, plan=None)  # type: ignore[arg-type]
+    assert task in prompt_none_plan
+    assert "Implementation Plan" not in prompt_none_plan
+
+    # Test with actual plan
+    plan = "Step 1: Create file\nStep 2: Write code"
+    prompt_with_plan = get_agent_system_prompt(task, plan)
+    assert task in prompt_with_plan
+    assert "Implementation Plan" in prompt_with_plan
+    assert plan in prompt_with_plan
+    assert "Follow the implementation plan" in prompt_with_plan
