@@ -92,10 +92,11 @@ def create_draft_node(model: Any) -> Any:
     Returns:
         Draft node function
     """
-    # System prompt for initial drafting with structured reflection
+    # Prompt for initial drafting with structured reflection
+    # Note: Using "human" instead of "system" as first message to avoid GLM rejection when tools are bound
     actor_prompt_template = ChatPromptTemplate.from_messages([
         (
-            "system",
+            "human",
             """You are an expert researcher with a critical eye for quality and completeness.
 Current time: {time}
 
@@ -256,9 +257,10 @@ The search results are provided in JSON format in the previous ToolMessage. The 
 - Is the revised answer more authoritative and complete?
 """
 
+    # Note: Using "human" instead of "system" as first message to avoid GLM rejection when tools are bound
     actor_prompt_template = ChatPromptTemplate.from_messages([
         (
-            "system",
+            "human",
             """You are an expert researcher synthesizing information from multiple sources.
 Current time: {time}
 
@@ -635,11 +637,12 @@ class ReflexionAgent:
         # Build custom prompt for summary writing
         # Note: Since enable_planning=False, set_planner_prompt will automatically
         # convert this to an agent prompt (requires {task}, {plan}, {tool_instructions})
+        # We don't show "Plan:" since planning is disabled and it will always be empty
         summary_prompt = f"""You are an expert research writer creating a polished markdown report.
 
-Task: {{task}}
+Your task: {{task}}
 
-Plan: {{plan}}
+{{plan}}
 
 ## Source Material
 

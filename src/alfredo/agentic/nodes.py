@@ -84,15 +84,32 @@ def create_agent_node(model: BaseChatModel, tools: list[Any], template: Optional
         plan = state["plan"]
         messages = list(state["messages"])
 
-        # Create system message with task and plan context (with custom template if provided)
-        system_msg = SystemMessage(content=get_agent_system_prompt(task, plan, tools=tools, custom_template=template))
+        # Get system prompt content
+        system_prompt = get_agent_system_prompt(task, plan, tools=tools, custom_template=template)
+
+        # If messages is empty (happens when planning is disabled), create both system and human messages
+        # Some models (like GLM) reject conversations without a HumanMessage when tools are bound
+        if not messages:
+            # Create separate system and human messages
+            # This ensures future iterations will have: [SystemMessage, HumanMessage, AIMessage, ToolMessage, ...]
+            system_msg = SystemMessage(content=system_prompt)
+            human_msg = HumanMessage(content=f"Task: {task}")
+            full_messages = [system_msg, human_msg]
+        else:
+            # Normal case: prepend SystemMessage (HumanMessage already in history from first iteration)
+            system_msg = SystemMessage(content=system_prompt)
+            full_messages = [system_msg, *messages]
 
         # Invoke model with full context
-        full_messages = [system_msg, *messages]
         response = model.invoke(full_messages)
 
         # Return updated messages
-        return {"messages": [response]}
+        # If this was the first iteration (messages was empty), return both the human message and response
+        # to ensure the human message is persisted in state for subsequent iterations
+        if not messages:
+            return {"messages": [full_messages[1], response]}  # [HumanMessage, AIMessage]
+        else:
+            return {"messages": [response]}
 
     return agent_node
 
