@@ -25,12 +25,105 @@ def _extract_instructions_for_node(tools: list[Any], node_name: str) -> str:
     return "\n\n".join(instructions) if instructions else ""
 
 
-def get_planning_prompt(task: str, tools: Optional[list[Any]] = None) -> str:
+def _process_custom_template(
+    custom_template: str,
+    required_vars: dict[str, Any],
+    var_order: list[str],
+) -> str:
+    """Process custom template with auto-wrapping or validation.
+
+    Supports two modes:
+    1. Auto-wrap mode: If template has NO placeholders, automatically prepends
+       dynamic variables and appends tool_instructions
+    2. Validation mode: If template HAS placeholders, validates all required
+       variables are present and formats the template
+
+    Args:
+        custom_template: User's template string
+        required_vars: Dict of all required variables (e.g., {"task": "...", "plan": "...", "tool_instructions": "..."})
+        var_order: Order of variables for auto-prepending (e.g., ["task", "plan"])
+            Note: tool_instructions is always appended, never prepended
+
+    Returns:
+        Formatted prompt string
+
+    Raises:
+        ValueError: If template has placeholders but is missing required ones
+
+    Examples:
+        >>> # Auto-wrap mode (no placeholders)
+        >>> result = _process_custom_template(
+        ...     "Create a detailed plan.",
+        ...     {"task": "Build app", "tool_instructions": "Use tools"},
+        ...     ["task"]
+        ... )
+        >>> # Result: "# Task\\nBuild app\\n\\nCreate a detailed plan.\\nUse tools"
+
+        >>> # Validation mode (has placeholders)
+        >>> result = _process_custom_template(
+        ...     "Task: {task}\\n\\n{tool_instructions}",
+        ...     {"task": "Build app", "tool_instructions": "Use tools"},
+        ...     ["task"]
+        ... )
+        >>> # Result: "Task: Build app\\n\\nUse tools"
+    """
+    import re
+
+    # Check if template has placeholders
+    has_placeholders = "{" in custom_template and "}" in custom_template
+
+    if not has_placeholders:
+        # AUTO-WRAP MODE
+        # Build prepend section (task, plan, etc.) - everything EXCEPT tool_instructions
+        prepend_parts = []
+        for var_name in var_order:
+            if var_name in required_vars and var_name != "tool_instructions":
+                value = required_vars[var_name]
+                # Format header nicely (e.g., "previous_plan" -> "Previous Plan")
+                header = var_name.replace("_", " ").title()
+                prepend_parts.append(f"# {header}\n{value}")
+
+        prepend_section = "\n\n".join(prepend_parts)
+
+        # Get tool_instructions for appending
+        # Note: tool_instructions already includes the "# Tool-Specific Instructions" header
+        tool_instructions = required_vars.get("tool_instructions", "")
+
+        # Build final prompt: PREPEND + USER CONTENT + APPEND
+        if prepend_section:
+            return f"{prepend_section}\n\n{custom_template}{tool_instructions}"
+        else:
+            return f"{custom_template}{tool_instructions}"
+
+    else:
+        # VALIDATION MODE
+        # Extract placeholder names from template
+        found_placeholders = set(re.findall(r"\{(\w+)\}", custom_template))
+        required_keys = set(required_vars.keys())
+
+        # Check if all required placeholders present (including tool_instructions!)
+        missing = required_keys - found_placeholders
+        if missing:
+            error_msg = (
+                f"Template missing required placeholders: {missing}. "
+                f"Required: {required_keys}. "
+                f"Found in template: {found_placeholders}"
+            )
+            raise ValueError(error_msg)
+
+        # Format with values
+        return custom_template.format(**required_vars)
+
+
+def get_planning_prompt(task: str, tools: Optional[list[Any]] = None, custom_template: Optional[str] = None) -> str:
     """Get the system prompt for creating an implementation plan.
 
     Args:
         task: The task to create a plan for
         tools: Optional list of tools (for extracting node-specific instructions)
+        custom_template: Optional custom template string. Can be:
+            - Plain text (auto-prepended with {task}, auto-appended with {tool_instructions})
+            - Template with {task} and {tool_instructions} placeholders
 
     Returns:
         Formatted planning prompt
@@ -42,6 +135,15 @@ def get_planning_prompt(task: str, tools: Optional[list[Any]] = None) -> str:
         if extracted:
             tool_instructions = f"\n\n# Tool-Specific Instructions\n\n{extracted}"
 
+    # If custom template provided, process it
+    if custom_template:
+        return _process_custom_template(
+            custom_template=custom_template,
+            required_vars={"task": task, "tool_instructions": tool_instructions},
+            var_order=["task"],
+        )
+
+    # Default built-in prompt
     return f"""You are a meticulous AI agent tasked with creating a comprehensive implementation plan.
 
 # Your Task
@@ -101,13 +203,18 @@ IMPORTANT: The final step must ALWAYS be calling the attempt_completion tool to 
 Now create the implementation plan for the task above."""
 
 
-def get_agent_system_prompt(task: str, plan: str, tools: Optional[list[Any]] = None) -> str:
+def get_agent_system_prompt(
+    task: str, plan: str, tools: Optional[list[Any]] = None, custom_template: Optional[str] = None
+) -> str:
     """Get the system prompt for the agent node.
 
     Args:
         task: The original task
         plan: The current implementation plan
         tools: Optional list of tools (for extracting node-specific instructions)
+        custom_template: Optional custom template string. Can be:
+            - Plain text (auto-prepended with {task} and {plan}, auto-appended with {tool_instructions})
+            - Template with {task}, {plan}, and {tool_instructions} placeholders
 
     Returns:
         Formatted agent system prompt
@@ -119,6 +226,15 @@ def get_agent_system_prompt(task: str, plan: str, tools: Optional[list[Any]] = N
         if extracted:
             tool_instructions = f"\n\n# Tool-Specific Instructions\n\n{extracted}"
 
+    # If custom template provided, process it
+    if custom_template:
+        return _process_custom_template(
+            custom_template=custom_template,
+            required_vars={"task": task, "plan": plan, "tool_instructions": tool_instructions},
+            var_order=["task", "plan"],
+        )
+
+    # Default built-in prompt
     return f"""You are an autonomous AI agent executing a task using a ReAct (Reasoning-Action-Observation) approach.
 
 # Original Task
@@ -177,7 +293,11 @@ Your answer will be verified before final completion."""
 
 
 def get_verification_prompt(
-    task: str, answer: str, execution_trace: str = "", tools: Optional[list[Any]] = None
+    task: str,
+    answer: str,
+    execution_trace: str = "",
+    tools: Optional[list[Any]] = None,
+    custom_template: Optional[str] = None,
 ) -> str:
     """Get the prompt for verifying if an answer satisfies the task.
 
@@ -186,6 +306,9 @@ def get_verification_prompt(
         answer: The agent's proposed answer
         execution_trace: Optional trace of actions taken during execution
         tools: Optional list of tools (for extracting node-specific instructions)
+        custom_template: Optional custom template string. Can be:
+            - Plain text (auto-prepended with {task}, {answer}, {trace_section}, auto-appended with {tool_instructions})
+            - Template with {task}, {answer}, {trace_section}, and {tool_instructions} placeholders
 
     Returns:
         Formatted verification prompt
@@ -196,17 +319,30 @@ def get_verification_prompt(
         extracted = _extract_instructions_for_node(tools, "verifier")
         if extracted:
             tool_instructions = f"\n\n# Tool-Specific Instructions\n\n{extracted}"
+
     trace_section = ""
     if execution_trace:
-        trace_section = f"""
-# Execution Trace
+        trace_section = f"""# Execution Trace
 
 Below is the complete trace of actions taken to complete the task:
 
 {execution_trace}
-
 """
 
+    # If custom template provided, process it
+    if custom_template:
+        return _process_custom_template(
+            custom_template=custom_template,
+            required_vars={
+                "task": task,
+                "answer": answer,
+                "trace_section": trace_section,
+                "tool_instructions": tool_instructions,
+            },
+            var_order=["task", "answer", "trace_section"],
+        )
+
+    # Default built-in prompt
     return f"""You are a verification agent. Your job is to determine if the task was actually completed by examining both the claimed answer and the execution trace.
 
 # Original Task
@@ -242,7 +378,11 @@ Be objective and thorough in your evaluation. Base your decision on concrete evi
 
 
 def get_replan_prompt(
-    task: str, previous_plan: str, verification_feedback: str, tools: Optional[list[Any]] = None
+    task: str,
+    previous_plan: str,
+    verification_feedback: str,
+    tools: Optional[list[Any]] = None,
+    custom_template: Optional[str] = None,
 ) -> str:
     """Get the prompt for creating a new plan after verification failure.
 
@@ -251,6 +391,9 @@ def get_replan_prompt(
         previous_plan: The plan that was just attempted
         verification_feedback: Feedback from the verification step
         tools: Optional list of tools (for extracting node-specific instructions)
+        custom_template: Optional custom template string. Can be:
+            - Plain text (auto-prepended with {task}, {previous_plan}, {verification_feedback}, auto-appended with {tool_instructions})
+            - Template with {task}, {previous_plan}, {verification_feedback}, and {tool_instructions} placeholders
 
     Returns:
         Formatted replanning prompt
@@ -261,6 +404,21 @@ def get_replan_prompt(
         extracted = _extract_instructions_for_node(tools, "replan")
         if extracted:
             tool_instructions = f"\n\n# Tool-Specific Instructions\n\n{extracted}"
+
+    # If custom template provided, process it
+    if custom_template:
+        return _process_custom_template(
+            custom_template=custom_template,
+            required_vars={
+                "task": task,
+                "previous_plan": previous_plan,
+                "verification_feedback": verification_feedback,
+                "tool_instructions": tool_instructions,
+            },
+            var_order=["task", "previous_plan", "verification_feedback"],
+        )
+
+    # Default built-in prompt
     return f"""You are a meticulous AI agent tasked with creating a NEW implementation plan.
 
 # Original Task

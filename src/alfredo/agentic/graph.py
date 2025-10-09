@@ -14,6 +14,7 @@ from alfredo.agentic.nodes import (
     create_tools_node,
     create_verifier_node,
 )
+from alfredo.agentic.prompt_templates import PromptTemplates
 from alfredo.agentic.state import AgentState
 from alfredo.integrations.langchain import create_langchain_tools
 from alfredo.tools.alfredo_tool import AlfredoTool
@@ -124,6 +125,7 @@ def create_agentic_graph(
     max_context_tokens: int = 100000,
     tools: Optional[list] = None,
     recursion_limit: int = 50,
+    prompt_templates: Optional[PromptTemplates] = None,
     **kwargs: Any,
 ) -> Any:
     """Create the agentic scaffold state graph.
@@ -134,6 +136,7 @@ def create_agentic_graph(
         max_context_tokens: Maximum context window size in tokens
         tools: Optional list of tools. If None, uses all Alfredo tools.
         recursion_limit: Maximum number of graph steps before raising an error (default: 50)
+        prompt_templates: Optional custom prompt templates for each node
         **kwargs: Additional keyword arguments to pass to the model
 
     Returns:
@@ -170,12 +173,18 @@ def create_agentic_graph(
     # Bind tools to model for agent node
     model_with_tools = model.bind_tools(langchain_tools, tool_choice="auto")
 
-    # Create nodes (pass normalized tools for instruction extraction)
-    planner_node = create_planner_node(model, tools=normalized_tools)
-    agent_node = create_agent_node(model_with_tools, tools=normalized_tools)
+    # Extract templates from prompt_templates if provided
+    planner_template = prompt_templates.planner if prompt_templates else None
+    agent_template = prompt_templates.agent if prompt_templates else None
+    verifier_template = prompt_templates.verifier if prompt_templates else None
+    replan_template = prompt_templates.replan if prompt_templates else None
+
+    # Create nodes (pass normalized tools and templates)
+    planner_node = create_planner_node(model, tools=normalized_tools, template=planner_template)
+    agent_node = create_agent_node(model_with_tools, tools=normalized_tools, template=agent_template)
     tools_node = create_tools_node(langchain_tools)
-    verifier_node = create_verifier_node(model, tools=normalized_tools)
-    replan_node = create_replan_node(model, tools=normalized_tools)
+    verifier_node = create_verifier_node(model, tools=normalized_tools, template=verifier_template)
+    replan_node = create_replan_node(model, tools=normalized_tools, template=replan_template)
 
     # Create state graph
     graph = StateGraph(AgentState)

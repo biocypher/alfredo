@@ -4,6 +4,7 @@
 from typing import Any, Optional
 
 from alfredo.agentic.graph import create_agentic_graph
+from alfredo.agentic.prompt_templates import PromptTemplates
 from alfredo.agentic.prompts import (
     get_agent_system_prompt,
     get_planning_prompt,
@@ -66,6 +67,9 @@ class Agent:
         else:
             self.tools = None
 
+        # Storage for custom prompt templates
+        self.prompt_templates = PromptTemplates()
+
         # Create the LangGraph
         self.graph = create_agentic_graph(
             cwd=cwd,
@@ -73,6 +77,7 @@ class Agent:
             max_context_tokens=max_context_tokens,
             tools=self.tools,
             recursion_limit=recursion_limit,
+            prompt_templates=self.prompt_templates,
             **kwargs,
         )
 
@@ -375,6 +380,112 @@ class Agent:
             with open(output_path, "w") as f:
                 f.write(output_text)
             print(f"\n💾 System prompts saved to: {output_path}")
+
+    def set_planner_prompt(self, template: str) -> None:
+        """Set custom planner prompt.
+
+        Args:
+            template: Custom prompt string. Can be:
+                - Plain text: Auto-prepended with task context, auto-appended with tool_instructions
+                - Template: Must include {task} and {tool_instructions}
+
+        Raises:
+            ValueError: If template has placeholders but missing required ones
+
+        Example:
+            >>> agent.set_planner_prompt("Create a detailed step-by-step implementation plan.")
+            >>> # Or with placeholders:
+            >>> agent.set_planner_prompt("Task: {task}\\n\\nCreate a plan.\\n\\n{tool_instructions}")
+        """
+        self.prompt_templates.planner = template
+        self._rebuild_graph()
+
+    def set_agent_prompt(self, template: str) -> None:
+        """Set custom agent prompt.
+
+        If using placeholders, must include: {task}, {plan}, {tool_instructions}
+
+        Args:
+            template: Custom prompt string
+
+        Raises:
+            ValueError: If template has placeholders but missing required ones
+
+        Example:
+            >>> agent.set_agent_prompt("Execute the plan step by step.")
+        """
+        self.prompt_templates.agent = template
+        self._rebuild_graph()
+
+    def set_verifier_prompt(self, template: str) -> None:
+        """Set custom verifier prompt.
+
+        If using placeholders, must include: {task}, {answer}, {trace_section}, {tool_instructions}
+
+        Args:
+            template: Custom prompt string
+
+        Raises:
+            ValueError: If template has placeholders but missing required ones
+
+        Example:
+            >>> agent.set_verifier_prompt("Check if the task was completed correctly.")
+        """
+        self.prompt_templates.verifier = template
+        self._rebuild_graph()
+
+    def set_replan_prompt(self, template: str) -> None:
+        """Set custom replan prompt.
+
+        If using placeholders, must include: {task}, {previous_plan}, {verification_feedback}, {tool_instructions}
+
+        Args:
+            template: Custom prompt string
+
+        Raises:
+            ValueError: If template has placeholders but missing required ones
+
+        Example:
+            >>> agent.set_replan_prompt("Create an improved plan based on the feedback.")
+        """
+        self.prompt_templates.replan = template
+        self._rebuild_graph()
+
+    def reset_prompts(self) -> None:
+        """Reset all prompts to defaults."""
+        self.prompt_templates = PromptTemplates()
+        self._rebuild_graph()
+
+    def get_prompt_template(self, node_name: str) -> Optional[str]:
+        """Get current custom template for a node.
+
+        Args:
+            node_name: Name of the node ("planner", "agent", "verifier", or "replan")
+
+        Returns:
+            The custom template string, or None if using default prompt
+
+        Example:
+            >>> template = agent.get_prompt_template("planner")
+            >>> if template:
+            ...     print(f"Custom planner template: {template}")
+        """
+        return getattr(self.prompt_templates, node_name, None)
+
+    def _rebuild_graph(self) -> None:
+        """Rebuild the graph with current settings (including prompt templates).
+
+        This is called automatically when prompt templates are modified.
+        """
+        self.graph = create_agentic_graph(
+            cwd=self.cwd,
+            model_name=self.model_name,
+            max_context_tokens=self.max_context_tokens,
+            tools=self.tools,
+            recursion_limit=self.recursion_limit,
+            prompt_templates=self.prompt_templates,
+            **self.model_kwargs,
+        )
 
     def run(self, task: str) -> dict[str, Any]:
         """Run an agentic task from start to finish.

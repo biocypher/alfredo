@@ -347,6 +347,164 @@ print(agent.results["final_answer"])
 
 The Agent class uses LangChain to automatically convert Alfredo tools to the native format of any LLM provider (OpenAI's function calling, Anthropic's tool use, etc.).
 
+### Customizing System Prompts
+
+You can customize the system prompts for any node in the agentic scaffold (planner, agent, verifier, replan). Alfredo supports two strategies for customizing prompts:
+
+#### Strategy 1: Plain Text (Auto-wrapping)
+
+Provide plain text without placeholders. The system automatically:
+- **Prepends** dynamic variables (task, plan, etc.) at the beginning
+- **Appends** tool-specific instructions at the end
+- Keeps your custom content in the middle
+
+```python
+from alfredo import Agent
+
+agent = Agent(cwd=".", model_name="gpt-4.1-mini")
+
+# Set custom planner prompt (plain text)
+agent.set_planner_prompt("""
+Your job is to create a detailed implementation plan.
+
+## Format Requirements
+1. Start with a brief overview (2-3 sentences)
+2. Break down into numbered sequential steps
+3. Include rationale for each step
+4. Define clear success criteria
+
+Be thorough and specific in your planning.
+""")
+
+# The system automatically adds:
+# - Task context at the beginning
+# - Tool instructions at the end
+
+# Run with custom prompt
+agent.run("Create a Python REST API")
+```
+
+#### Strategy 2: Explicit Placeholders (Validation)
+
+Provide a template with `{placeholder}` variables. The system:
+- **Validates** that all required placeholders are present
+- **Formats** the template with actual values
+- Raises `ValueError` if any required placeholders are missing
+
+```python
+from alfredo import Agent
+
+agent = Agent(cwd=".", model_name="gpt-4.1-mini")
+
+# Set custom agent prompt with explicit placeholders
+agent.set_agent_prompt("""
+# Original Task
+{task}
+
+# Current Plan
+{plan}
+
+# Your Mission
+Execute the plan step by step. After each action:
+1. Reflect on the result
+2. Check if you're following the plan
+3. Adjust if necessary
+
+Be methodical and careful.
+
+{tool_instructions}
+
+**CRITICAL**: Call attempt_completion when done!
+""")
+
+agent.run("Build a calculator")
+```
+
+#### Required Placeholders by Node
+
+Each node has specific required variables:
+
+| Node | Required Placeholders | Description |
+|------|----------------------|-------------|
+| **planner** | `{task}`, `{tool_instructions}` | Creates implementation plan |
+| **agent** | `{task}`, `{plan}`, `{tool_instructions}` | Executes the plan |
+| **verifier** | `{task}`, `{answer}`, `{trace_section}`, `{tool_instructions}` | Verifies completion |
+| **replan** | `{task}`, `{previous_plan}`, `{verification_feedback}`, `{tool_instructions}` | Creates improved plan |
+
+**Important**: `{tool_instructions}` is **always required** and should be included in your template (or auto-appended in plain text mode).
+
+#### Additional Examples
+
+**Customize verifier to be more strict:**
+```python
+agent.set_verifier_prompt("""
+You are a strict verification agent.
+
+Task: {task}
+Proposed Answer: {answer}
+
+{trace_section}
+
+## Verification Checklist
+✓ Task fully completed?
+✓ All requirements met?
+✓ Evidence in trace?
+✓ No errors or failures?
+
+Be highly critical. Only approve if ALL criteria met.
+
+{tool_instructions}
+
+Output: VERIFIED: [reason] or NOT_VERIFIED: [reason]
+""")
+```
+
+**Customize replan to focus on efficiency:**
+```python
+agent.set_replan_prompt("""
+Task: {task}
+
+Previous attempt: {previous_plan}
+
+Why it failed: {verification_feedback}
+
+Create a NEW, MORE EFFICIENT plan that:
+- Addresses the feedback directly
+- Uses fewer steps if possible
+- Has clearer success criteria
+
+{tool_instructions}
+""")
+```
+
+#### Managing Custom Prompts
+
+```python
+# Get current template for a node
+template = agent.get_prompt_template("planner")
+if template:
+    print(f"Using custom planner template: {template}")
+
+# Reset all prompts to defaults
+agent.reset_prompts()
+
+# Reset specific node by setting it again
+agent.set_planner_prompt(None)  # Not supported - use reset_prompts() instead
+
+# Set multiple prompts
+agent.set_planner_prompt("Create a concise plan.")
+agent.set_agent_prompt("Work carefully and methodically.")
+agent.set_verifier_prompt("Verify thoroughly.")
+```
+
+#### Best Practices
+
+1. **Plain text for simplicity**: If you don't need precise control over variable placement, use plain text mode
+2. **Placeholders for full control**: Use explicit placeholders when you need exact formatting
+3. **Always include tool_instructions**: This ensures tools with custom instructions (like todo lists) work properly
+4. **Test your templates**: Run `agent.get_system_prompts()` to preview prompts before running tasks
+5. **Keep it focused**: Shorter, clearer prompts often work better than verbose ones
+
 ### Alternative Usage Patterns
 
 For specialized use cases or direct control, Alfredo provides alternative execution modes:
