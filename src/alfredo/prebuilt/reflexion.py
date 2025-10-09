@@ -123,7 +123,7 @@ def create_execute_tools_node(search_tool: Any) -> Any:
     """Create the tool execution node that runs searches from the agent's queries.
 
     Args:
-        search_tool: Tool to use for executing searches (e.g., TavilySearchResults)
+        search_tool: Tool to use for executing searches (e.g., TavilySearch)
 
     Returns:
         Tool execution node function
@@ -252,7 +252,7 @@ def create_reflexion_graph(
     Args:
         model_name: Name of the language model to use
         max_iterations: Maximum number of revision iterations
-        search_tool: Tool for executing searches. If None, uses TavilySearchResults
+        search_tool: Tool for executing searches. If None, uses TavilySearch
         **kwargs: Additional arguments to pass to model initialization
 
     Returns:
@@ -264,12 +264,12 @@ def create_reflexion_graph(
     # Default to Tavily if no search tool provided
     if search_tool is None:
         try:
-            from langchain_community.tools.tavily_search import TavilySearchResults
+            from langchain_tavily import TavilySearch
 
-            search_tool = TavilySearchResults(max_results=5)
+            search_tool = TavilySearch(max_results=5)
         except ImportError as e:
             msg = (
-                "TavilySearchResults not available. Install with: uv add langchain-community tavily-python\n"
+                "TavilySearch not available. Install with: uv add langchain-tavily\n"
                 "Or provide a custom search_tool parameter."
             )
             raise ImportError(msg) from e
@@ -343,7 +343,7 @@ class ReflexionAgent:
             cwd: Working directory (used for output path resolution)
             model_name: Name of the language model to use (default: "gpt-4.1-mini")
             max_iterations: Maximum number of revision iterations (default: 2)
-            search_tool: Optional custom search tool. If None, uses TavilySearchResults
+            search_tool: Optional custom search tool. If None, uses TavilySearch
             output_path: Path to save research results. If None, saves to notes/reflexion_research.md
             verbose: Whether to print progress updates during execution
             **kwargs: Additional keyword arguments to pass to the model
