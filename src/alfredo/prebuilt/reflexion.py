@@ -223,19 +223,35 @@ def create_revisor_node(model: Any) -> Any:
     # System prompt for revision with structured reflection
     revise_instructions = """Revise your previous answer by synthesizing new information with your original response.
 
+**Using Search Results:**
+The search results are provided in JSON format in the previous ToolMessage. The structure is:
+```json
+{
+  "query": [
+    {"url": "https://source1.com", "title": "...", "content": "..."},
+    {"url": "https://source2.com", "title": "...", "content": "..."}
+  ]
+}
+```
+
+**CRITICAL - Extracting URLs for Citations:**
+1. Parse the JSON search results from the ToolMessage
+2. For each source you cite, extract the actual **'url'** field from the JSON
+3. In the 'references' list, format as: "[1] https://actual-url-from-result.com, [2] https://..."
+4. NEVER use placeholders or numbers only - always include the full URL from the search result
+
 **Integration Guidelines:**
 - **Synthesize, don't just append**: Weave new information naturally into your narrative
 - **Cite inline**: Use numerical citations [1], [2] that flow with the text
+- **Extract actual URLs**: Pull the real URL from each search result's 'url' field
 - **Verify claims**: Ensure every factual assertion is backed by search results
 - **Remove redundancy**: Cut information that's now superseded or less relevant
 - **Maintain structure**: Keep the answer well-organized and within ~250 words
-- **Add References section**: List all citations at the end (not counted in word limit):
-  - [1] https://example.com
-  - [2] https://example.com
 
 **Quality Check:**
 - Have I used the new information to fill the identified gaps?
 - Are citations integrated naturally, not forced?
+- Have I extracted actual URLs (not just result counts)?
 - Have I removed vague or speculative content now backed by data?
 - Is the revised answer more authoritative and complete?
 """
