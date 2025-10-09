@@ -5,6 +5,7 @@ notes/
 
 #examples
 examples/
+notebooks/
 
 # VSCode
 .vscode/

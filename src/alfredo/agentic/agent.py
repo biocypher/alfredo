@@ -4,6 +4,12 @@
 from typing import Any, Optional
 
 from alfredo.agentic.graph import create_agentic_graph
+from alfredo.agentic.prompts import (
+    get_agent_system_prompt,
+    get_planning_prompt,
+    get_replan_prompt,
+    get_verification_prompt,
+)
 from alfredo.agentic.state import AgentState
 
 
@@ -74,6 +80,270 @@ class Agent:
             final_answer, is_verified. Returns None if run() hasn't been called yet.
         """
         return self._results
+
+    def _has_todo_tools(self) -> bool:
+        """Check if todo list tools are present in the tool list.
+
+        Returns:
+            True if write_todo_list or read_todo_list tools are present
+        """
+        if self.tools is None:
+            # Import here to avoid circular import
+            from alfredo.integrations.langchain import create_langchain_tools
+
+            tools = create_langchain_tools(cwd=self.cwd)
+        else:
+            tools = self.tools
+
+        tool_names = {getattr(t, "name", "") for t in tools}
+        return "write_todo_list" in tool_names or "read_todo_list" in tool_names
+
+    def _is_mcp_tool(self, tool_name: str) -> bool:
+        """Determine if a tool is an MCP tool based on its name.
+
+        Args:
+            tool_name: Name of the tool
+
+        Returns:
+            True if tool is an MCP (or other external) tool, False if it's an Alfredo tool
+        """
+        # Check against the authoritative registry of Alfredo tools
+        from alfredo.tools.registry import registry
+
+        alfredo_tool_ids = registry.get_all_tool_ids()
+        return tool_name not in alfredo_tool_ids
+
+    def get_system_prompts(
+        self,
+        task: str = "Example task",
+        plan: str = "Example plan",
+        answer: str = "Example answer",
+        verification_feedback: str = "Example feedback",
+    ) -> dict[str, str]:
+        """Get all system prompts used by different nodes in the agentic graph.
+
+        Args:
+            task: Example task text for formatting (default: "Example task")
+            plan: Example plan text for formatting (default: "Example plan")
+            answer: Example answer for verification prompt (default: "Example answer")
+            verification_feedback: Example feedback for replan prompt (default: "Example feedback")
+
+        Returns:
+            Dictionary with keys: planner, agent, verifier, replan
+        """
+        has_todo_tools = self._has_todo_tools()
+
+        return {
+            "planner": get_planning_prompt(task=task, has_todo_tools=has_todo_tools),
+            "agent": get_agent_system_prompt(task=task, plan=plan, has_todo_tools=has_todo_tools),
+            "verifier": get_verification_prompt(task=task, answer=answer, execution_trace=""),
+            "replan": get_replan_prompt(task=task, previous_plan=plan, verification_feedback=verification_feedback),
+        }
+
+    def get_tool_descriptions(self) -> list[dict[str, Any]]:
+        """Get descriptions of all tools available to the agent.
+
+        Returns:
+            List of dictionaries with keys: name, description, parameters, tool_type
+            where tool_type is either "alfredo" or "mcp"
+        """
+        if self.tools is None:
+            # Import here to avoid circular import
+            from alfredo.integrations.langchain import create_langchain_tools
+
+            tools = create_langchain_tools(cwd=self.cwd)
+        else:
+            tools = self.tools
+
+        tool_descriptions = []
+
+        for tool in tools:
+            # Detect tool type (MCP tools often have prefixes like "bc_", "fs_", etc.)
+            tool_name = getattr(tool, "name", "unknown")
+            tool_type = "mcp" if self._is_mcp_tool(tool_name) else "alfredo"
+
+            # Extract basic info
+            description = getattr(tool, "description", "No description available")
+
+            # Extract parameters from args_schema
+            parameters = []
+            if hasattr(tool, "args_schema") and tool.args_schema is not None:
+                schema = tool.args_schema
+                if hasattr(schema, "model_fields"):
+                    # Pydantic v2
+                    for field_name, field_info in schema.model_fields.items():
+                        param_info = {
+                            "name": field_name,
+                            "required": field_info.is_required(),
+                            "description": field_info.description or "No description",
+                        }
+                        parameters.append(param_info)
+                elif hasattr(schema, "__fields__"):
+                    # Pydantic v1
+                    for field_name, field_info in schema.__fields__.items():
+                        param_info = {
+                            "name": field_name,
+                            "required": field_info.required,
+                            "description": field_info.field_info.description or "No description",
+                        }
+                        parameters.append(param_info)
+
+            tool_descriptions.append({
+                "name": tool_name,
+                "description": description,
+                "parameters": parameters,
+                "tool_type": tool_type,
+            })
+
+        return tool_descriptions
+
+    def _format_tool_section(self, tools: list[dict[str, Any]], section_title: str) -> list[str]:
+        """Format a section of tools for display.
+
+        Args:
+            tools: List of tool dictionaries
+            section_title: Title for the section (e.g., "ALFREDO TOOLS")
+
+        Returns:
+            List of formatted output lines
+        """
+        output_lines: list[str] = []
+        if not tools:
+            return output_lines
+
+        output_lines.append("=" * 80)
+        output_lines.append(section_title)
+        output_lines.append("=" * 80)
+        output_lines.append("")
+
+        for tool in tools:
+            output_lines.append(f"## {tool['name']}")
+            output_lines.append("")
+            output_lines.append(f"**Description:** {tool['description']}")
+            output_lines.append("")
+
+            if tool["parameters"]:
+                output_lines.append("**Parameters:**")
+                for param in tool["parameters"]:
+                    required = "required" if param["required"] else "optional"
+                    output_lines.append(f"  - `{param['name']}` ({required}): {param['description']}")
+                output_lines.append("")
+            else:
+                output_lines.append("**Parameters:** None")
+                output_lines.append("")
+
+        return output_lines
+
+    def display_tool_descriptions(self, save_to_file: bool = False) -> None:
+        """Display formatted descriptions of all available tools.
+
+        Args:
+            save_to_file: If True, save output to alfredo/notes/tool_descriptions.md
+        """
+        tool_descriptions = self.get_tool_descriptions()
+
+        # Group by tool type
+        alfredo_tools = [t for t in tool_descriptions if t["tool_type"] == "alfredo"]
+        mcp_tools = [t for t in tool_descriptions if t["tool_type"] == "mcp"]
+
+        output_lines = []
+        output_lines.append("=" * 80)
+        output_lines.append("TOOL DESCRIPTIONS")
+        output_lines.append("=" * 80)
+        output_lines.append("")
+        output_lines.append(f"Total Tools: {len(tool_descriptions)}")
+        output_lines.append(f"- Alfredo Tools: {len(alfredo_tools)}")
+        output_lines.append(f"- MCP Tools: {len(mcp_tools)}")
+        output_lines.append("")
+
+        # Display Alfredo tools
+        output_lines.extend(self._format_tool_section(alfredo_tools, "ALFREDO TOOLS"))
+
+        # Display MCP tools
+        output_lines.extend(self._format_tool_section(mcp_tools, "MCP TOOLS"))
+
+        output_text = "\n".join(output_lines)
+        print(output_text)
+
+        # Save to file if requested
+        if save_to_file:
+            from pathlib import Path
+
+            # Determine notes directory (relative to project root or absolute)
+            notes_dir = Path(self.cwd) / "alfredo" / "notes"
+            if not notes_dir.exists():
+                notes_dir = Path(self.cwd) / "notes"
+            if not notes_dir.exists():
+                notes_dir.mkdir(parents=True, exist_ok=True)
+
+            output_path = notes_dir / "tool_descriptions.md"
+            with open(output_path, "w") as f:
+                f.write(output_text)
+            print(f"\n💾 Tool descriptions saved to: {output_path}")
+
+    def display_system_prompts(
+        self,
+        task: str = "Example task",
+        plan: str = "Example plan",
+        save_to_file: bool = False,
+    ) -> None:
+        """Display all system prompts used by different nodes in the agentic graph.
+
+        Args:
+            task: Example task text for formatting (default: "Example task")
+            plan: Example plan text for formatting (default: "Example plan")
+            save_to_file: If True, save output to alfredo/notes/system_prompts.md
+        """
+        prompts = self.get_system_prompts(task=task, plan=plan)
+        tool_descriptions = self.get_tool_descriptions()
+
+        output_lines = []
+        output_lines.append("=" * 80)
+        output_lines.append("AGENT SYSTEM PROMPTS")
+        output_lines.append("=" * 80)
+        output_lines.append("")
+        output_lines.append("## Configuration")
+        output_lines.append("")
+        output_lines.append(f"- **Model:** {self.model_name}")
+        output_lines.append(f"- **Working Directory:** {self.cwd}")
+        output_lines.append(f"- **Max Context Tokens:** {self.max_context_tokens}")
+        output_lines.append(f"- **Recursion Limit:** {self.recursion_limit}")
+        output_lines.append(f"- **Tools Available:** {len(tool_descriptions)}")
+
+        # Group tools by type
+        alfredo_count = sum(1 for t in tool_descriptions if t["tool_type"] == "alfredo")
+        mcp_count = sum(1 for t in tool_descriptions if t["tool_type"] == "mcp")
+        output_lines.append(f"  - Alfredo: {alfredo_count}")
+        output_lines.append(f"  - MCP: {mcp_count}")
+        output_lines.append("")
+
+        # Display each prompt
+        for node_name, prompt_text in prompts.items():
+            output_lines.append("=" * 80)
+            output_lines.append(f"{node_name.upper()} NODE PROMPT")
+            output_lines.append("=" * 80)
+            output_lines.append("")
+            output_lines.append(prompt_text)
+            output_lines.append("")
+
+        output_text = "\n".join(output_lines)
+        print(output_text)
+
+        # Save to file if requested
+        if save_to_file:
+            from pathlib import Path
+
+            # Determine notes directory (relative to project root or absolute)
+            notes_dir = Path(self.cwd) / "alfredo" / "notes"
+            if not notes_dir.exists():
+                notes_dir = Path(self.cwd) / "notes"
+            if not notes_dir.exists():
+                notes_dir.mkdir(parents=True, exist_ok=True)
+
+            output_path = notes_dir / "system_prompts.md"
+            with open(output_path, "w") as f:
+                f.write(output_text)
+            print(f"\n💾 System prompts saved to: {output_path}")
 
     def run(self, task: str) -> dict[str, Any]:
         """Run an agentic task from start to finish.
@@ -168,8 +438,8 @@ class Agent:
                 print(f"Tool Calls ({len(msg.tool_calls)}):")
                 for tc in msg.tool_calls:
                     tool_name = tc.get("name", "unknown")
-                    # Detect MCP tools (usually prefixed)
-                    prefix = "🔬 [MCP]" if tool_name.startswith("bc_") else "🛠️  [Alfredo]"
+                    # Detect MCP tools using consistent logic
+                    prefix = "🔬 [MCP]" if self._is_mcp_tool(tool_name) else "🛠️  [Alfredo]"
                     print(f"  {prefix} {tool_name}")
                     if "args" in tc:
                         args_str = str(tc["args"])
