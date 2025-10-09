@@ -623,18 +623,23 @@ class ReflexionAgent:
         if self.verbose:
             print("\n📝 Generating polished summary with Agent...")
 
-        # Create Agent instance for summary writing
+        # Create Agent instance for summary writing (with planning disabled)
         summary_agent = Agent(
             cwd=str(self.cwd),
             model_name=self.model_name,
             verbose=self.verbose,
+            enable_planning=False,
             **self.model_kwargs,
         )
 
-        # Build custom planner prompt for summary writing
+        # Build custom prompt for summary writing
+        # Note: Since enable_planning=False, set_planner_prompt will automatically
+        # convert this to an agent prompt (requires {task}, {plan}, {tool_instructions})
         summary_prompt = f"""You are an expert research writer creating a polished markdown report.
 
 Task: {{task}}
+
+Plan: {{plan}}
 
 ## Source Material
 
@@ -699,7 +704,7 @@ Synthesize this research into a comprehensive, professional markdown report save
 - Preserve all citations and references
 """
 
-        # Set custom planner prompt
+        # Set custom planner prompt (Agent class will auto-convert to agent prompt since planning is disabled)
         summary_agent.set_planner_prompt(summary_prompt)
 
         # Store reference to summary agent for trace display

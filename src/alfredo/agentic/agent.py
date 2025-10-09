@@ -389,10 +389,14 @@ class Agent:
     def set_planner_prompt(self, template: str) -> None:
         """Set custom planner prompt.
 
+        Note: If planning is disabled (enable_planning=False), this method will automatically
+        set the agent prompt instead, since the planner node is not used.
+
         Args:
             template: Custom prompt string. Can be:
                 - Plain text: Auto-prepended with task context, auto-appended with tool_instructions
                 - Template: Must include {task} and {tool_instructions}
+                  (or {task}, {plan}, {tool_instructions} if planning is disabled)
 
         Raises:
             ValueError: If template has placeholders but missing required ones
@@ -402,6 +406,13 @@ class Agent:
             >>> # Or with placeholders:
             >>> agent.set_planner_prompt("Task: {task}\\n\\nCreate a plan.\\n\\n{tool_instructions}")
         """
+        # If planning is disabled, set agent prompt instead
+        if not self.enable_planning:
+            if self.verbose:
+                print("INFO: Planning is disabled - setting agent prompt instead of planner prompt")
+            self.set_agent_prompt(template)
+            return
+
         self.prompt_templates.planner = template
         self._rebuild_graph()
 
