@@ -25,6 +25,8 @@ from langgraph.graph.message import add_messages
 from pydantic import BaseModel, Field
 from typing_extensions import TypedDict
 
+from alfredo.agentic.agent import Agent
+
 # ============================================================================
 # Pydantic Schemas for Structured Outputs
 # ============================================================================
@@ -90,16 +92,56 @@ def create_draft_node(model: Any) -> Any:
     Returns:
         Draft node function
     """
-    # System prompt for initial drafting
+    # System prompt for initial drafting with structured reflection
     actor_prompt_template = ChatPromptTemplate.from_messages([
         (
             "system",
-            """You are an expert researcher.
+            """You are an expert researcher with a critical eye for quality and completeness.
 Current time: {time}
 
-1. Provide a detailed ~250 word answer to the question.
-2. Reflect and critique your answer. Be severe to maximize improvement.
-3. After the reflection, list 1-3 search queries separately for researching improvements. Do not include them inside the reflection.
+## Your Task
+
+1. **Draft Answer (~250 words)**
+   Provide a comprehensive, well-structured answer to the question.
+   - Use clear, concise language
+   - Structure information logically
+   - Make claims that can be verified
+
+2. **Critical Self-Reflection**
+   Rigorously evaluate your answer across these dimensions:
+
+   **Accuracy & Verifiability**
+   - Are all facts correct and verifiable?
+   - Are there any unverified claims or assumptions stated as facts?
+   - What specific evidence is missing to support key claims?
+
+   **Completeness & Depth**
+   - What critical information, context, or nuance is missing?
+   - Are there important perspectives, cases, or scenarios not covered?
+   - What deeper questions does this answer raise but not address?
+
+   **Clarity & Structure**
+   - Is the answer well-organized and easy to follow?
+   - Are there vague statements that need clarification?
+   - Would specific examples or data strengthen understanding?
+
+   **Assumptions & Biases**
+   - What assumptions are implicit in this answer?
+   - Are there alternative viewpoints or interpretations to consider?
+   - What might be missing due to my current knowledge limitations?
+
+   Be specific and severe in your critique. Instead of "incomplete information",
+   say "missing data on market size in developing countries" or "no discussion
+   of regulatory challenges in the EU".
+
+3. **Targeted Search Queries (1-3)**
+   Based on your reflection, formulate 1-3 specific search queries that will
+   address the most critical gaps. Prioritize:
+   - Queries that fill factual or data gaps
+   - Queries that provide missing perspectives
+   - Queries that verify questionable claims
+
+   Keep queries separate from the reflection.
 """,
         ),
         MessagesPlaceholder(variable_name="messages"),
@@ -178,25 +220,66 @@ def create_revisor_node(model: Any) -> Any:
     Returns:
         Revisor node function
     """
-    # System prompt for revision
-    revise_instructions = """Revise your previous answer using the new information.
-    - You should use the previous critique to add important information to your answer.
-    - You MUST include numerical citations in your revised answer to ensure it can be verified.
-    - Add a "References" section to the bottom of your answer (which does not count towards the word limit). In form of:
-        - [1] https://example.com
-        - [2] https://example.com
-    - You should use the previous critique to remove superfluous information from your answer and make SURE it is not more than 250 words.
+    # System prompt for revision with structured reflection
+    revise_instructions = """Revise your previous answer by synthesizing new information with your original response.
+
+**Integration Guidelines:**
+- **Synthesize, don't just append**: Weave new information naturally into your narrative
+- **Cite inline**: Use numerical citations [1], [2] that flow with the text
+- **Verify claims**: Ensure every factual assertion is backed by search results
+- **Remove redundancy**: Cut information that's now superseded or less relevant
+- **Maintain structure**: Keep the answer well-organized and within ~250 words
+- **Add References section**: List all citations at the end (not counted in word limit):
+  - [1] https://example.com
+  - [2] https://example.com
+
+**Quality Check:**
+- Have I used the new information to fill the identified gaps?
+- Are citations integrated naturally, not forced?
+- Have I removed vague or speculative content now backed by data?
+- Is the revised answer more authoritative and complete?
 """
 
     actor_prompt_template = ChatPromptTemplate.from_messages([
         (
             "system",
-            """You are an expert researcher.
+            """You are an expert researcher synthesizing information from multiple sources.
 Current time: {time}
 
-1. {first_instruction}
-2. Reflect and critique your answer. Be severe to maximize improvement.
-3. After the reflection, list 1-3 search queries separately for researching improvements. Do not include them inside the reflection.
+## Your Task
+
+1. **Revise Your Answer**
+{first_instruction}
+
+2. **Critical Self-Reflection**
+   Evaluate your revised answer using the same rigorous framework:
+
+   **Accuracy & Verifiability**
+   - Are all claims now properly cited?
+   - Do the citations actually support the claims made?
+   - Are there still unverified assertions?
+
+   **Completeness & Depth**
+   - Have the critical gaps been addressed?
+   - What important information is still missing?
+   - Are there new questions raised by this information?
+
+   **Clarity & Integration**
+   - Is new information smoothly integrated?
+   - Are there contradictions or inconsistencies?
+   - Does the narrative flow logically?
+
+   **Synthesis Quality**
+   - Have I truly synthesized sources or just concatenated them?
+   - Is this answer more authoritative than the previous version?
+   - What would make this answer even stronger?
+
+   Be specific about remaining gaps. E.g., "Still missing quantitative data on adoption rates in Asia"
+   vs. "More information needed".
+
+3. **Targeted Search Queries (1-3)**
+   If critical gaps remain, formulate 1-3 specific queries to address them.
+   If the answer is now comprehensive, you may suggest 0 queries.
 """,
         ),
         MessagesPlaceholder(variable_name="messages"),
@@ -334,6 +417,7 @@ class ReflexionAgent:
         max_iterations: int = 2,
         search_tool: Optional[Any] = None,
         output_path: Optional[str] = None,
+        use_summary_agent: bool = True,
         verbose: bool = True,
         **kwargs: Any,
     ) -> None:
@@ -345,6 +429,7 @@ class ReflexionAgent:
             max_iterations: Maximum number of revision iterations (default: 2)
             search_tool: Optional custom search tool. If None, uses TavilySearch
             output_path: Path to save research results. If None, saves to notes/reflexion_research.md
+            use_summary_agent: Whether to use Agent class to write polished summary (default: True)
             verbose: Whether to print progress updates during execution
             **kwargs: Additional keyword arguments to pass to the model
                 (e.g., temperature, base_url, api_key)
@@ -352,6 +437,7 @@ class ReflexionAgent:
         self.cwd = Path(cwd).resolve()
         self.model_name = model_name
         self.max_iterations = max_iterations
+        self.use_summary_agent = use_summary_agent
         self.verbose = verbose
         self.model_kwargs = kwargs
 
@@ -373,6 +459,7 @@ class ReflexionAgent:
 
         # Storage for execution results
         self._results: Optional[dict[str, Any]] = None
+        self._summary_agent: Optional[Any] = None  # Stores summary agent for trace display
 
     @property
     def results(self) -> Optional[dict[str, Any]]:
@@ -431,7 +518,12 @@ class ReflexionAgent:
 
             # Save to file if output path is set
             if self.output_path:
-                self._save_research_report(question, final_answer, final_state)
+                if self.use_summary_agent:
+                    # Use Agent class to write polished summary
+                    final_answer = self._write_summary_with_agent(question, final_answer, final_state)
+                else:
+                    # Use basic report format
+                    self._save_research_report(question, final_answer, final_state)
 
             # Store results
             self._results = final_state
@@ -501,6 +593,121 @@ class ReflexionAgent:
         if self.verbose:
             print(f"💾 Research report saved to: {self.output_path}")
 
+    def _write_summary_with_agent(self, question: str, answer: str, state: dict[str, Any]) -> str:
+        """Use Agent class to write a polished markdown summary of the research.
+
+        Args:
+            question: The research question
+            answer: The final answer with citations
+            state: The final state containing execution details
+
+        Returns:
+            The final markdown summary content
+        """
+        if self.verbose:
+            print("\n📝 Generating polished summary with Agent...")
+
+        # Create Agent instance for summary writing
+        summary_agent = Agent(
+            cwd=str(self.cwd),
+            model_name=self.model_name,
+            verbose=self.verbose,
+            **self.model_kwargs,
+        )
+
+        # Build custom planner prompt for summary writing
+        summary_prompt = f"""You are an expert research writer creating a polished markdown report.
+
+Task: {{task}}
+
+## Source Material
+
+**Research Question:**
+{question}
+
+**Final Answer (with citations):**
+{answer}
+
+**Research Metadata:**
+- Model: {self.model_name}
+- Iterations: {state["iteration"]}/{self.max_iterations}
+- Date: {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+
+## Your Mission
+
+Synthesize this research into a comprehensive, professional markdown report saved to: {self.output_path}
+
+## Report Structure
+
+```markdown
+# Reflexion Research Report
+
+## Question
+[State the research question clearly]
+
+## Executive Summary
+[2-3 sentence high-level summary of key findings]
+
+## Key Findings
+[3-5 bullet points highlighting the most important insights]
+
+## Detailed Analysis
+[The full answer, properly formatted with markdown:
+ - Use headers (##, ###) to organize content
+ - Use bullet points and numbered lists where appropriate
+ - Ensure inline citations [1], [2] are preserved
+ - Break long paragraphs for readability]
+
+## Methodology
+[Brief note on the research process:
+ - Model used
+ - Iterations performed
+ - Reflexion approach (self-critique and revision)]
+
+## References
+[All citations from the answer, formatted as:
+ - [1] URL or source
+ - [2] URL or source
+ ...]
+
+---
+*Generated by ReflexionAgent using iterative self-critique*
+```
+
+{{tool_instructions}}
+
+**CRITICAL:**
+- Write the complete report to {self.output_path}
+- Call attempt_completion with the final report content
+- Ensure markdown is properly formatted and professional
+- Preserve all citations and references
+"""
+
+        # Set custom planner prompt
+        summary_agent.set_planner_prompt(summary_prompt)
+
+        # Store reference to summary agent for trace display
+        self._summary_agent = summary_agent
+
+        # Run the agent to generate summary
+        task = f"Create a comprehensive markdown research report for the question: '{question}'"
+        result = summary_agent.run(task)
+
+        # Extract the final report
+        final_report = result.get("final_answer")
+
+        if final_report is None:
+            # Fallback to basic report if agent fails
+            if self.verbose:
+                print("⚠️  Summary agent failed, using basic report format")
+            self._save_research_report(question, answer, state)
+            return answer
+
+        if self.verbose:
+            print(f"✅ Summary written to: {self.output_path}")
+
+        return cast(str, final_report)
+
     def display_trace(self) -> None:
         """Display a formatted trace of the research process.
 
@@ -510,6 +717,7 @@ class ReflexionAgent:
         - Search queries executed
         - Revisions made
         - Final answer
+        - Summary agent trace (if use_summary_agent=True)
 
         Raises:
             RuntimeError: If research() hasn't been called yet
@@ -530,6 +738,15 @@ class ReflexionAgent:
             current_iteration = self._display_message(message, current_iteration)
 
         print("\n" + "=" * 80)
+
+        # Display summary agent trace if available
+        if self._summary_agent is not None:
+            print("\n" + "=" * 80)
+            print("SUMMARY AGENT TRACE")
+            print("=" * 80)
+            print("\nThe following shows the Agent's work in creating the polished summary:\n")
+            self._summary_agent.display_trace()
+            print("\n" + "=" * 80)
 
     def _print_trace_header(self, question: str, iterations: int, message_count: int) -> None:
         """Print the trace header with summary information."""
