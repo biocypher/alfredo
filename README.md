@@ -1,49 +1,41 @@
-# alfredo
+# Alfredo
 
-[![Release](https://img.shields.io/github/v/release/fcarli/alfredo)](https://img.shields.io/github/v/release/fcarli/alfredo)
-[![Build status](https://img.shields.io/github/actions/workflow/status/fcarli/alfredo/main.yml?branch=main)](https://github.com/fcarli/alfredo/actions/workflows/main.yml?query=branch%3Amain)
-[![codecov](https://codecov.io/gh/fcarli/alfredo/branch/main/graph/badge.svg)](https://codecov.io/gh/fcarli/alfredo)
-[![Commit activity](https://img.shields.io/github/commit-activity/m/fcarli/alfredo)](https://img.shields.io/github/commit-activity/m/fcarli/alfredo)
-[![License](https://img.shields.io/github/license/fcarli/alfredo)](https://img.shields.io/github/license/fcarli/alfredo)
+[![Release](https://img.shields.io/github/v/release/biocypher/alfredo)](https://img.shields.io/github/v/release/biocypher/alfredo)
+[![Build status](https://img.shields.io/github/actions/workflow/status/biocypher/alfredo/main.yml?branch=main)](https://github.com/biocypher/alfredo/actions/workflows/main.yml?query=branch%3Amain)
+[![codecov](https://codecov.io/gh/biocypher/alfredo/branch/main/graph/badge.svg)](https://codecov.io/gh/biocypher/alfredo)
+[![License](https://img.shields.io/github/license/biocypher/alfredo)](https://img.shields.io/github/license/biocypher/alfredo)
 
-Python harness for AI agents with comprehensive tool execution capabilities.
+**A Python harness for building AI agents with comprehensive tool execution and autonomous task completion.**
 
-- **Github repository**: <https://github.com/fcarli/alfredo/>
-- **Documentation** <https://fcarli.github.io/alfredo/>
+Alfredo provides a LangGraph-based agentic scaffold that combines planning, execution, and verification into a cohesive agent framework. Built with extensibility in mind, it supports custom tools, MCP integration, and comes with specialized prebuilt agents.
 
-## Features
+## Key Features
 
-🤖 **Autonomous Agent** - Agent class with automatic planning, execution, and verification
+🤖 **Autonomous Agent** - Plan-verify-replan loop with automatic task decomposition
+🔧 **10 Built-in Tools** - File ops, commands, discovery, code analysis, and workflow control
+🔗 **MCP Integration** - Connect to any Model Context Protocol server
+🎯 **Model Agnostic** - OpenAI, Anthropic, or any LangChain-supported LLM
+📊 **Execution Tracing** - Detailed visibility into agent actions
+🛠️ **Custom System Prompts** - Fine-tune node behavior with AlfredoTool
+📦 **Prebuilt Agents** - ExplorationAgent and ReflexionAgent ready to use
 
-✨ **Comprehensive Tool System** - 8 built-in tools for file operations, command execution, and workflow control
+## Installation
 
-🔗 **MCP Integration** - Connect to any MCP server for extended capabilities
-
-🔧 **LangChain/LangGraph Compatible** - Seamlessly integrate with LangChain agents and workflows
-
-🎯 **Model Agnostic** - Support for different LLM providers (OpenAI, Anthropic, and more)
-
-📊 **Execution Tracing** - View detailed traces of all agent actions and tool calls
-
-📦 **Easy to Extend** - Simple API for creating custom tools
-
-🔒 **Type Safe** - Full type hints and Pydantic validation
-
-## Quick Start
-
-### Installation
+**Note:** Alfredo is not yet available on PyPI. Install directly from GitHub using `uv`:
 
 ```bash
-# Full installation with agentic scaffold
-uv add alfredo
+# Clone the repository
+git clone https://github.com/biocypher/alfredo.git
+cd alfredo
 
-# Or install from PyPI
-pip install alfredo
+# Install dependencies
+uv sync
+
+# Or add as a dependency to your project
+uv add git+https://github.com/biocypher/alfredo.git
 ```
 
-### Basic Usage - Agent Class (Recommended)
-
-The Agent class provides autonomous task execution with automatic planning and verification:
+## Quick Start
 
 ```python
 from alfredo import Agent
@@ -55,8 +47,8 @@ agent = Agent(
     verbose=True
 )
 
-# Run a task
-agent.run("Create a Python script that prints 'Hello, World!'")
+# Run a task - agent will plan, execute, and verify
+agent.run("Create a Python script that computes an approximation of pi using the Monte Carlo method")
 
 # View execution trace
 agent.display_trace()
@@ -65,25 +57,43 @@ agent.display_trace()
 print(agent.results["final_answer"])
 ```
 
-### LangChain Integration
+## Architecture
 
-Convert Alfredo tools to LangChain format for custom agent implementations:
+Alfredo uses a **LangGraph state graph** with the following nodes:
 
-```python
-from alfredo.integrations.langchain import create_langchain_tools
-from langchain_anthropic import ChatAnthropic
-
-# Convert Alfredo tools to LangChain format
-tools = create_langchain_tools(cwd=".")
-
-# Use with any LangChain agent
-model = ChatAnthropic(model="claude-3-5-sonnet-20241022")
-model_with_tools = model.bind_tools(tools)
+```
+START → planner → agent ⇄ tools → verifier
+                   ↑              ↓
+                   └── replan ←───┘
 ```
 
-### MCP Integration
+- **planner**: Creates implementation plan
+- **agent**: Performs ReAct-style reasoning and tool calls
+- **tools**: Executes tool calls
+- **verifier**: Checks if task is complete
+- **replan**: Generates improved plan if verification fails
 
-Combine Alfredo tools with MCP servers for extended capabilities:
+Planning can be disabled to start execution directly at the agent node.
+
+**[Read More: Agent Architecture →](docs/agent-architecture.md)**
+
+## Available Tools
+
+Alfredo includes 10 built-in tools organized by category:
+
+| Category | Tools |
+|----------|-------|
+| **File Operations** | `read_file`, `write_to_file`, `replace_in_file` |
+| **Discovery** | `list_files`, `search_files` |
+| **Code Analysis** | `list_code_definition_names` |
+| **Commands** | `execute_command` |
+| **Workflow** | `ask_followup_question`, `attempt_completion` |
+
+**[Read More: Tools Documentation →](docs/tools.md)**
+
+## MCP Integration
+
+Extend Alfredo with any MCP-compatible server:
 
 ```python
 from alfredo import Agent
@@ -97,142 +107,92 @@ server_configs = {
     }
 }
 
-# Load tools
+# Load Alfredo + MCP tools
 tools = load_combined_tools_sync(cwd=".", mcp_server_configs=server_configs)
 
 # Create agent with combined toolset
 agent = Agent(cwd=".", tools=tools)
-agent.run("Get the interactors of TP53 in human")
+agent.run("Get the interactors of TP53 in human and save the results to a file called tp53_interactors.txt")
 ```
 
-## Available Tools
+**[Read More: MCP Integration →](docs/mcp-integration.md)**
 
-| Tool | Description |
-|------|-------------|
-| `read_file` | Read file contents |
-| `write_to_file` | Create or overwrite files |
-| `replace_in_file` | Apply diff-based edits |
-| `execute_command` | Run shell commands with timeout |
-| `list_files` | List directory contents (recursive option) |
-| `search_files` | Regex search across files |
-| `ask_followup_question` | Request user input |
-| `attempt_completion` | Signal task completion |
+## Customizing System Prompts
 
-## Documentation
-
-- [Tools Documentation](TOOLS_README.md) - Complete guide to all tools
-- [LangChain Integration](LANGCHAIN_INTEGRATION.md) - Using Alfredo with LangChain/LangGraph
-- [Developer Guide](CLAUDE.md) - Contributing and development setup
-
-## Examples
-
-### Agent Class Usage
-
-The Agent class autonomously plans and executes tasks:
+Use `AlfredoTool` to add node-specific instructions to any tool:
 
 ```python
-from alfredo import Agent
+from alfredo.tools.alfredo_tool import AlfredoTool
 
-# Create agent
-agent = Agent(cwd=".", model_name="gpt-4.1-mini", verbose=True)
+# Add instructions that only appear in specific nodes
+tool = AlfredoTool.from_alfredo(
+    tool_id="write_todo_list",
+    cwd=".",
+    system_instructions={
+        "planner": "After making your plan, create an initial checklist to keep track of your progress",
+    }
+)
 
-# File operations
-agent.run("Read config.yaml and create a summary in summary.txt")
+# Instructions are dynamically injected into node system prompts
+agent = Agent(cwd=".", tools=[tool])
+```
 
-# Command execution
-agent.run("Run the test suite and report any failures")
+**[Read More: AlfredoTool & System Prompts →](docs/alfredo-tools.md)**
 
-# File discovery
-agent.run("Find all Python test files and count how many there are")
+## Prebuilt Agents
 
-# Display execution trace
+### ExplorationAgent
+
+Explore directories and generate comprehensive markdown reports with smart file reading and data analysis:
+
+```python
+from alfredo.prebuilt import ExplorationAgent
+
+agent = ExplorationAgent(
+    cwd="./my_project",
+    context_prompt="Data belongs to a transcriptomic study on cancer cell lines"
+)
+report = agent.explore()
+```
+
+### ReflexionAgent
+
+Research agent with iterative self-critique and revision using web search:
+
+```python
+from alfredo.prebuilt import ReflexionAgent
+
+agent = ReflexionAgent(model_name="gpt-4.1-mini", max_iterations=2)
+answer = agent.research("Create a detailed report about the roles of TP53 in cancer cell lines and save the results to a file called tp53_roles.md")
 agent.display_trace()
 ```
 
-### Functional API
+**[Read More: Prebuilt Agents →](docs/prebuilt-agents.md)**
 
-For one-off tasks without creating an agent instance:
+## Documentation
 
-```python
-from alfredo.agentic.graph import run_agentic_task
-
-result = run_agentic_task(
-    task="Create a hello world Python script",
-    cwd=".",
-    model_name="gpt-4.1-mini",
-    verbose=True
-)
-
-print(result["final_answer"])
-```
-
-### OpenAI Native Integration
-
-Direct OpenAI API integration without LangChain:
-
-```python
-from alfredo import OpenAIAgent
-
-agent = OpenAIAgent(cwd=".", model="gpt-4.1-mini")
-result = agent.run("Read the file config.json and summarize it")
-print(result["final_answer"])
-```
+- **[Agent Architecture](docs/agent-architecture.md)** - Deep dive into the LangGraph scaffold
+- **[Tools](docs/tools.md)** - Complete tool reference and creating custom tools
+- **[MCP Integration](docs/mcp-integration.md)** - Using Model Context Protocol servers
+- **[AlfredoTool](docs/alfredo-tools.md)** - Customizing system prompts per node
+- **[Prebuilt Agents](docs/prebuilt-agents.md)** - ExplorationAgent and ReflexionAgent
 
 ## Development
 
-This project uses `uv` as the package manager.
-
-### Setup
-
 ```bash
-# Clone the repository
-git clone https://github.com/fcarli/alfredo.git
-cd alfredo
-
 # Install dependencies
 make install
 
-# Or manually
-uv sync
-```
-
-### Testing
-
-```bash
-# Run all tests
+# Run tests
 uv run pytest
 
-# Run with coverage
+# Run tests with coverage
 uv run pytest --cov=src
 
-# Run specific test file
-uv run pytest tests/test_agent.py -v
-```
-
-### Code Quality
-
-```bash
-# Format code
-uv run ruff format src tests
-
-# Lint
+# Lint and type check
 uv run ruff check src
-
-# Type check
 uv run mypy src
 ```
-
-## Architecture
-
-Alfredo's tool system is inspired by the [Cline](https://github.com/cline/cline) coding agent and provides:
-
-- **Tool Specifications** - Declarative tool definitions with parameters
-- **Tool Registry** - Centralized management of available tools
-- **Tool Handlers** - Modular execution logic
-- **Prompt Builder** - Automatic system prompt generation
-- **LangChain Adapter** - Convert tools to LangChain format
-
-See [TOOLS_README.md](TOOLS_README.md) for detailed architecture documentation.
 
 ## License
 
