@@ -75,7 +75,7 @@ START → planner → agent ⇄ tools → verifier
 
 Planning can be disabled to start execution directly at the agent node.
 
-**[Read More: Agent Architecture →](docs/agent-architecture.md)**
+**[Read More: Agent Architecture →](https://github.com/biocypher/alfredo/blob/main/docs/agent-architecture.md)**
 
 ## Available Tools
 
@@ -89,7 +89,7 @@ Alfredo includes 10 built-in tools organized by category:
 | **Commands** | `execute_command` |
 | **Workflow** | `ask_followup_question`, `attempt_completion` |
 
-**[Read More: Tools Documentation →](docs/tools.md)**
+**[Read More: Tools Documentation →](https://github.com/biocypher/alfredo/blob/main/docs/tools.md)**
 
 ## MCP Integration
 
@@ -115,7 +115,7 @@ agent = Agent(cwd=".", tools=tools)
 agent.run("Get the interactors of TP53 in human and save the results to a file called tp53_interactors.txt")
 ```
 
-**[Read More: MCP Integration →](docs/mcp-integration.md)**
+**[Read More: MCP Integration →](https://github.com/biocypher/alfredo/blob/main/docs/mcp-integration.md)**
 
 ## Customizing System Prompts
 
@@ -137,7 +137,7 @@ tool = AlfredoTool.from_alfredo(
 agent = Agent(cwd=".", tools=[tool])
 ```
 
-**[Read More: AlfredoTool & System Prompts →](docs/alfredo-tools.md)**
+**[Read More: AlfredoTool & System Prompts →](https://github.com/biocypher/alfredo/blob/main/docs/alfredo-tools.md)**
 
 ## Prebuilt Agents
 
@@ -167,15 +167,15 @@ answer = agent.research("Create a detailed report about the roles of TP53 in can
 agent.display_trace()
 ```
 
-**[Read More: Prebuilt Agents →](docs/prebuilt-agents.md)**
+**[Read More: Prebuilt Agents →](https://github.com/biocypher/alfredo/blob/main/docs/prebuilt-agents.md)**
 
 ## Documentation
 
-- **[Agent Architecture](docs/agent-architecture.md)** - Deep dive into the LangGraph scaffold
-- **[Tools](docs/tools.md)** - Complete tool reference and creating custom tools
-- **[MCP Integration](docs/mcp-integration.md)** - Using Model Context Protocol servers
-- **[AlfredoTool](docs/alfredo-tools.md)** - Customizing system prompts per node
-- **[Prebuilt Agents](docs/prebuilt-agents.md)** - ExplorationAgent and ReflexionAgent
+- **[Agent Architecture](https://github.com/biocypher/alfredo/blob/main/docs/agent-architecture.md)** - Deep dive into the LangGraph scaffold
+- **[Tools](https://github.com/biocypher/alfredo/blob/main/docs/tools.md)** - Complete tool reference and creating custom tools
+- **[MCP Integration](https://github.com/biocypher/alfredo/blob/main/docs/mcp-integration.md)** - Using Model Context Protocol servers
+- **[AlfredoTool](https://github.com/biocypher/alfredo/blob/main/docs/alfredo-tools.md)** - Customizing system prompts per node
+- **[Prebuilt Agents](https://github.com/biocypher/alfredo/blob/main/docs/prebuilt-agents.md)** - ExplorationAgent and ReflexionAgent
 
 ## Development
 
