@@ -11,13 +11,13 @@ Alfredo provides a LangGraph-based agentic scaffold that combines planning, exec
 
 ## Key Features
 
-🤖 **Autonomous Agent** - Plan-verify-replan loop with automatic task decomposition
-🔧 **10 Built-in Tools** - File ops, commands, discovery, code analysis, and workflow control
-🔗 **MCP Integration** - Connect to any Model Context Protocol server
-🎯 **Model Agnostic** - OpenAI, Anthropic, or any LangChain-supported LLM
-📊 **Execution Tracing** - Detailed visibility into agent actions
-🛠️ **Custom System Prompts** - Fine-tune node behavior with AlfredoTool
-📦 **Prebuilt Agents** - ExplorationAgent and ReflexionAgent ready to use
+- 🤖 **Autonomous Agent** - Plan-verify-replan loop with automatic task decomposition
+- 🔧 **10 Built-in Tools** - File ops, commands, discovery, code analysis, and workflow control
+- 🔗 **MCP Integration** - Connect to any Model Context Protocol server
+- 🎯 **Model Agnostic** - OpenAI, Anthropic, or any LangChain-supported LLM
+- 📊 **Execution Tracing** - Detailed visibility into agent actions
+- 🛠️ **Custom System Prompts** - Fine-tune node behavior with AlfredoTool
+- 📦 **Prebuilt Agents** - ExplorationAgent and ReflexionAgent ready to use
 
 ## Installation
 
