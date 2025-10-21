@@ -37,6 +37,7 @@ class Agent:
         verbose: bool = True,
         recursion_limit: int = 50,
         enable_planning: bool = True,
+        code_act_tools: Optional[list[str]] = None,
         **kwargs: Any,
     ) -> None:
         """Initialize the agentic agent.
@@ -51,6 +52,10 @@ class Agent:
             recursion_limit: Maximum number of graph steps (default: 50)
             enable_planning: Whether to use the planner node for creating implementation plans.
                 If False, agent starts directly without planning step (default: True)
+            code_act_tools: Optional list of tool IDs to expose as code in system prompts.
+                Example: ["read_file", "write_to_file", "execute_command"]
+                When specified, these tools' full implementation code will be injected into
+                system prompts, allowing the model to write scripts that import and use them.
             **kwargs: Additional keyword arguments to pass to the model
                 (e.g., temperature, base_url, api_key)
         """
@@ -60,6 +65,7 @@ class Agent:
         self.verbose = verbose
         self.recursion_limit = recursion_limit
         self.enable_planning = enable_planning
+        self.code_act_tools = code_act_tools
         self.model_kwargs = kwargs
 
         # Normalize tools (wrap plain StructuredTools as AlfredoTools)
@@ -83,6 +89,7 @@ class Agent:
             recursion_limit=recursion_limit,
             enable_planning=enable_planning,
             prompt_templates=self.prompt_templates,
+            code_act_tools=code_act_tools,
             **kwargs,
         )
 
@@ -501,6 +508,7 @@ class Agent:
             recursion_limit=self.recursion_limit,
             enable_planning=self.enable_planning,
             prompt_templates=self.prompt_templates,
+            code_act_tools=self.code_act_tools,
             **self.model_kwargs,
         )
 

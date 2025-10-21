@@ -17,13 +17,16 @@ from alfredo.agentic.prompts import (
 from alfredo.agentic.state import AgentState
 
 
-def create_planner_node(model: BaseChatModel, tools: list[Any], template: Optional[str] = None) -> Any:
+def create_planner_node(
+    model: BaseChatModel, tools: list[Any], template: Optional[str] = None, code_act_tools: Optional[list[str]] = None
+) -> Any:
     """Create the planner node that generates initial implementation plans.
 
     Args:
         model: The language model to use for planning
         tools: List of AlfredoTools (for extracting node-specific instructions)
         template: Optional custom prompt template
+        code_act_tools: Optional list of tool IDs to expose as code (e.g., ["read_file", "write_to_file"])
 
     Returns:
         Planner node function
@@ -42,7 +45,7 @@ def create_planner_node(model: BaseChatModel, tools: list[Any], template: Option
         plan_iteration = state.get("plan_iteration", 0)
 
         # Get planning prompt (with custom template if provided)
-        planning_prompt = get_planning_prompt(task, tools=tools, custom_template=template)
+        planning_prompt = get_planning_prompt(task, tools=tools, custom_template=template, code_act_tools=code_act_tools)
 
         # Generate plan
         messages = [HumanMessage(content=planning_prompt)]
@@ -59,13 +62,16 @@ def create_planner_node(model: BaseChatModel, tools: list[Any], template: Option
     return planner_node
 
 
-def create_agent_node(model: BaseChatModel, tools: list[Any], template: Optional[str] = None) -> Any:
+def create_agent_node(
+    model: BaseChatModel, tools: list[Any], template: Optional[str] = None, code_act_tools: Optional[list[str]] = None
+) -> Any:
     """Create the agent node that performs reasoning and tool calling.
 
     Args:
         model: The language model with tools bound
         tools: List of AlfredoTools (for extracting node-specific instructions)
         template: Optional custom prompt template
+        code_act_tools: Optional list of tool IDs to expose as code (e.g., ["read_file", "write_to_file"])
 
     Returns:
         Agent node function
@@ -85,7 +91,7 @@ def create_agent_node(model: BaseChatModel, tools: list[Any], template: Optional
         messages = list(state["messages"])
 
         # Get system prompt content
-        system_prompt = get_agent_system_prompt(task, plan, tools=tools, custom_template=template)
+        system_prompt = get_agent_system_prompt(task, plan, tools=tools, custom_template=template, code_act_tools=code_act_tools)
 
         # If messages is empty (happens when planning is disabled), create both system and human messages
         # Some models (like GLM) reject conversations without a HumanMessage when tools are bound
@@ -250,13 +256,16 @@ def format_execution_trace(messages: Sequence) -> str:  # noqa: C901
     return "\n".join(trace_lines)
 
 
-def create_verifier_node(model: BaseChatModel, tools: list[Any], template: Optional[str] = None) -> Any:
+def create_verifier_node(
+    model: BaseChatModel, tools: list[Any], template: Optional[str] = None, code_act_tools: Optional[list[str]] = None
+) -> Any:
     """Create the verifier node that checks if answers satisfy the task.
 
     Args:
         model: The language model to use for verification
         tools: List of AlfredoTools (for extracting node-specific instructions)
         template: Optional custom prompt template
+        code_act_tools: Optional list of tool IDs to expose as code (e.g., ["read_file", "write_to_file"])
 
     Returns:
         Verifier node function
@@ -284,7 +293,7 @@ def create_verifier_node(model: BaseChatModel, tools: list[Any], template: Optio
 
         # Get verification prompt with full execution trace (with custom template if provided)
         verification_prompt = get_verification_prompt(
-            task, final_answer, execution_trace, tools=tools, custom_template=template
+            task, final_answer, execution_trace, tools=tools, custom_template=template, code_act_tools=code_act_tools
         )
 
         # Check if answer is satisfactory
@@ -304,13 +313,16 @@ def create_verifier_node(model: BaseChatModel, tools: list[Any], template: Optio
     return verifier_node
 
 
-def create_replan_node(model: BaseChatModel, tools: list[Any], template: Optional[str] = None) -> Any:
+def create_replan_node(
+    model: BaseChatModel, tools: list[Any], template: Optional[str] = None, code_act_tools: Optional[list[str]] = None
+) -> Any:
     """Create the replan node that generates new plans after verification failure.
 
     Args:
         model: The language model to use for replanning
         tools: List of AlfredoTools (for extracting node-specific instructions)
         template: Optional custom prompt template
+        code_act_tools: Optional list of tool IDs to expose as code (e.g., ["read_file", "write_to_file"])
 
     Returns:
         Replan node function
@@ -340,7 +352,7 @@ def create_replan_node(model: BaseChatModel, tools: list[Any], template: Optiona
 
         # Get replanning prompt (with custom template if provided)
         replan_prompt = get_replan_prompt(
-            task, previous_plan, verification_feedback, tools=tools, custom_template=template
+            task, previous_plan, verification_feedback, tools=tools, custom_template=template, code_act_tools=code_act_tools
         )
 
         # Generate new plan

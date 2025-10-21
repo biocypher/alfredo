@@ -115,7 +115,12 @@ def _process_custom_template(
         return custom_template.format(**required_vars)
 
 
-def get_planning_prompt(task: str, tools: Optional[list[Any]] = None, custom_template: Optional[str] = None) -> str:
+def get_planning_prompt(
+    task: str,
+    tools: Optional[list[Any]] = None,
+    custom_template: Optional[str] = None,
+    code_act_tools: Optional[list[str]] = None,
+) -> str:
     """Get the system prompt for creating an implementation plan.
 
     Args:
@@ -124,6 +129,7 @@ def get_planning_prompt(task: str, tools: Optional[list[Any]] = None, custom_tem
         custom_template: Optional custom template string. Can be:
             - Plain text (auto-prepended with {task}, auto-appended with {tool_instructions})
             - Template with {task} and {tool_instructions} placeholders
+        code_act_tools: Optional list of tool IDs to expose as code (e.g., ["read_file", "write_to_file"])
 
     Returns:
         Formatted planning prompt
@@ -134,6 +140,14 @@ def get_planning_prompt(task: str, tools: Optional[list[Any]] = None, custom_tem
         extracted = _extract_instructions_for_node(tools, "planner")
         if extracted:
             tool_instructions = f"\n\n# Tool-Specific Instructions\n\n{extracted}"
+
+        # Inject tool code if code_act_tools is specified
+        if code_act_tools:
+            from alfredo.tools.code_extraction import format_tool_code_section
+
+            tool_code = format_tool_code_section(tools, tool_ids=code_act_tools)
+            if tool_code:
+                tool_instructions += f"\n\n{tool_code}"
 
     # If custom template provided, process it
     if custom_template:
@@ -204,7 +218,11 @@ Now create the implementation plan for the task above."""
 
 
 def get_agent_system_prompt(
-    task: str, plan: str, tools: Optional[list[Any]] = None, custom_template: Optional[str] = None
+    task: str,
+    plan: str,
+    tools: Optional[list[Any]] = None,
+    custom_template: Optional[str] = None,
+    code_act_tools: Optional[list[str]] = None,
 ) -> str:
     """Get the system prompt for the agent node.
 
@@ -215,6 +233,7 @@ def get_agent_system_prompt(
         custom_template: Optional custom template string. Can be:
             - Plain text (auto-prepended with {task} and {plan}, auto-appended with {tool_instructions})
             - Template with {task}, {plan}, and {tool_instructions} placeholders
+        code_act_tools: Optional list of tool IDs to expose as code (e.g., ["read_file", "write_to_file"])
 
     Returns:
         Formatted agent system prompt
@@ -225,6 +244,14 @@ def get_agent_system_prompt(
         extracted = _extract_instructions_for_node(tools, "agent")
         if extracted:
             tool_instructions = f"\n\n# Tool-Specific Instructions\n\n{extracted}"
+
+        # Inject tool code if code_act_tools is specified
+        if code_act_tools:
+            from alfredo.tools.code_extraction import format_tool_code_section
+
+            tool_code = format_tool_code_section(tools, tool_ids=code_act_tools)
+            if tool_code:
+                tool_instructions += f"\n\n{tool_code}"
 
     # If custom template provided, process it
     if custom_template:
@@ -302,6 +329,7 @@ def get_verification_prompt(
     execution_trace: str = "",
     tools: Optional[list[Any]] = None,
     custom_template: Optional[str] = None,
+    code_act_tools: Optional[list[str]] = None,
 ) -> str:
     """Get the prompt for verifying if an answer satisfies the task.
 
@@ -313,6 +341,7 @@ def get_verification_prompt(
         custom_template: Optional custom template string. Can be:
             - Plain text (auto-prepended with {task}, {answer}, {trace_section}, auto-appended with {tool_instructions})
             - Template with {task}, {answer}, {trace_section}, and {tool_instructions} placeholders
+        code_act_tools: Optional list of tool IDs to expose as code (e.g., ["read_file", "write_to_file"])
 
     Returns:
         Formatted verification prompt
@@ -323,6 +352,14 @@ def get_verification_prompt(
         extracted = _extract_instructions_for_node(tools, "verifier")
         if extracted:
             tool_instructions = f"\n\n# Tool-Specific Instructions\n\n{extracted}"
+
+        # Inject tool code if code_act_tools is specified
+        if code_act_tools:
+            from alfredo.tools.code_extraction import format_tool_code_section
+
+            tool_code = format_tool_code_section(tools, tool_ids=code_act_tools)
+            if tool_code:
+                tool_instructions += f"\n\n{tool_code}"
 
     trace_section = ""
     if execution_trace:
@@ -387,6 +424,7 @@ def get_replan_prompt(
     verification_feedback: str,
     tools: Optional[list[Any]] = None,
     custom_template: Optional[str] = None,
+    code_act_tools: Optional[list[str]] = None,
 ) -> str:
     """Get the prompt for creating a new plan after verification failure.
 
@@ -398,6 +436,7 @@ def get_replan_prompt(
         custom_template: Optional custom template string. Can be:
             - Plain text (auto-prepended with {task}, {previous_plan}, {verification_feedback}, auto-appended with {tool_instructions})
             - Template with {task}, {previous_plan}, {verification_feedback}, and {tool_instructions} placeholders
+        code_act_tools: Optional list of tool IDs to expose as code (e.g., ["read_file", "write_to_file"])
 
     Returns:
         Formatted replanning prompt
@@ -408,6 +447,14 @@ def get_replan_prompt(
         extracted = _extract_instructions_for_node(tools, "replan")
         if extracted:
             tool_instructions = f"\n\n# Tool-Specific Instructions\n\n{extracted}"
+
+        # Inject tool code if code_act_tools is specified
+        if code_act_tools:
+            from alfredo.tools.code_extraction import format_tool_code_section
+
+            tool_code = format_tool_code_section(tools, tool_ids=code_act_tools)
+            if tool_code:
+                tool_instructions += f"\n\n{tool_code}"
 
     # If custom template provided, process it
     if custom_template:
