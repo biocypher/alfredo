@@ -37,6 +37,7 @@ class Agent:
         verbose: bool = True,
         recursion_limit: int = 50,
         enable_planning: bool = True,
+        codeact_mcp_functions: Optional[dict[str, dict[str, Any]]] = None,
         **kwargs: Any,
     ) -> None:
         """Initialize the agentic agent.
@@ -51,6 +52,8 @@ class Agent:
             recursion_limit: Maximum number of graph steps (default: 50)
             enable_planning: Whether to use the planner node for creating implementation plans.
                 If False, agent starts directly without planning step (default: True)
+            codeact_mcp_functions: Optional MCP server configurations for generating
+                importable Python wrapper modules. Format: {"name": {"url": "...", "headers": {...}}}
             **kwargs: Additional keyword arguments to pass to the model
                 (e.g., temperature, base_url, api_key)
         """
@@ -71,6 +74,10 @@ class Agent:
         else:
             self.tools = None
 
+        # Generate MCP HTTP wrapper modules if configured
+        if codeact_mcp_functions:
+            self._generate_mcp_http_wrappers(codeact_mcp_functions)
+
         # Storage for custom prompt templates
         self.prompt_templates = PromptTemplates()
 
@@ -88,6 +95,106 @@ class Agent:
 
         # Storage for execution results
         self._results: Optional[dict[str, Any]] = None
+
+    def _generate_mcp_http_wrappers(self, codeact_mcp_functions: dict[str, dict[str, Any]]) -> None:  # noqa: C901
+        """Generate MCP HTTP wrapper modules and add tool with system instructions.
+
+        Args:
+            codeact_mcp_functions: Dictionary mapping module names to server configurations
+                Format: {"name": {"url": "...", "headers": {...}}}
+        """
+        from pathlib import Path
+
+        from langchain_core.tools import StructuredTool
+
+        from alfredo.integrations.mcp_http_wrapper import MCPWrapperGenerator
+        from alfredo.tools.alfredo_tool import AlfredoTool
+
+        # Initialize tools list if needed
+        if self.tools is None:
+            self.tools = []
+
+        # Generate wrapper modules and collect instructions
+        all_instructions = []
+
+        for name, config in codeact_mcp_functions.items():
+            if self.verbose:
+                print(f"🔧 Generating MCP HTTP wrapper for '{name}'...")
+
+            # Extract config
+            server_url = config.get("url")
+            if not server_url:
+                if self.verbose:
+                    print(f"⚠️  Skipping '{name}': No 'url' specified")
+                continue
+
+            headers = config.get("headers")
+
+            try:
+                # Create generator
+                generator = MCPWrapperGenerator(
+                    server_url=server_url,
+                    name=name,
+                    headers=headers,
+                )
+
+                # Initialize session
+                if self.verbose:
+                    print(f"   Initializing MCP session at {server_url}...")
+                generator.initialize_session()
+
+                # Fetch schema
+                if self.verbose:
+                    print("   Fetching tools via JSON-RPC tools/list...")
+                tools_schema = generator.fetch_tools_schema()
+
+                if self.verbose:
+                    print(f"   Found {len(tools_schema)} tools")
+
+                # Generate module in cwd
+                module_path = Path(self.cwd) / f"{name}_mcp.py"
+                if self.verbose:
+                    print(f"   Generating module at {module_path}...")
+                generator.generate_module(str(module_path))
+
+                # Get instructions for system prompt
+                instructions = generator.generate_system_instructions()
+                all_instructions.append(instructions)
+
+                if self.verbose:
+                    print(f"✅ Generated wrapper for '{name}' ({len(tools_schema)} tools)\n")
+
+            except Exception as e:
+                if self.verbose:
+                    print(f"❌ Failed to generate wrapper for '{name}': {e}\n")
+                continue
+
+        # Create synthetic tool with system instructions
+        if all_instructions:
+            combined_instructions = "\n\n".join(all_instructions)
+
+            # Create a dummy StructuredTool (not actually callable, just for instruction delivery)
+            def _dummy_mcp_http_info() -> str:
+                """Synthetic tool for MCP HTTP module documentation."""
+                return "This tool provides documentation for MCP HTTP wrapper modules."
+
+            dummy_tool = StructuredTool.from_function(
+                func=_dummy_mcp_http_info,
+                name="mcp_http_modules_info",
+                description="Documentation for MCP HTTP wrapper modules available as imports",
+            )
+
+            # Wrap as AlfredoTool with system instructions for agent node
+            alfredo_tool = AlfredoTool.from_langchain(
+                langchain_tool=dummy_tool,
+                system_instructions={"agent": combined_instructions},
+            )
+
+            # Add to tools list
+            self.tools.append(alfredo_tool)
+
+            if self.verbose:
+                print("📝 Added MCP HTTP module documentation to agent system prompt\n")
 
     @property
     def results(self) -> Optional[dict[str, Any]]:
