@@ -309,6 +309,389 @@ uv run python examples/mcp_remote_example.py
 
 For more MCP servers: https://github.com/modelcontextprotocol/servers
 
+## MCP HTTP Wrapper Generator
+
+Alfredo provides a powerful MCP HTTP wrapper generator that allows agents to import and use MCP tools as regular Python functions instead of through a ReAct loop. This enables script-based tool chaining and more efficient code generation.
+
+### Overview
+
+The MCP HTTP wrapper generator:
+- Connects to MCP servers using the official JSON-RPC 2.0 protocol
+- Fetches tool schemas via the `tools/list` method
+- Generates importable Python modules with typed wrapper functions
+- Handles session management and Server-Sent Events (SSE) responses
+- Stores modules in the agent's working directory
+- Automatically injects usage instructions into system prompts
+- Enables agents to write scripts that chain tool calls
+
+### Installation
+
+```bash
+# Add requests library (required for HTTP calls)
+uv add requests
+```
+
+### Basic Usage
+
+```python
+from alfredo import Agent
+
+# Create agent with MCP server configuration
+agent = Agent(
+    cwd="./workspace",
+    model_name="gpt-4.1-mini",
+    codeact_mcp_functions={
+        "codeact": {
+            "url": "http://localhost:8000",
+            "headers": {"Authorization": "Bearer token"}  # Optional
+        }
+    },
+    verbose=True
+)
+
+# This automatically:
+# 1. Initializes MCP session using JSON-RPC initialize method
+# 2. Fetches schema via JSON-RPC tools/list method
+# 3. Generates ./workspace/codeact_mcp.py module
+# 4. Injects import instructions into agent's system prompt
+
+# Agent can now write scripts like:
+# from codeact_mcp import read_file, write_file
+# data = read_file("/config.json")  # Returns parsed dictionary
+# write_file("/output.txt", data["some_field"])
+```
+
+### Configuration Format
+
+```python
+codeact_mcp_functions = {
+    "module_name": {
+        "url": "http://server-url",           # Required: MCP server base URL
+        "headers": {                           # Optional: HTTP headers
+            "Authorization": "Bearer token",
+            "X-Custom-Header": "value"
+        }
+    }
+}
+```
+
+### Multiple MCP Servers
+
+```python
+agent = Agent(
+    cwd="./workspace",
+    codeact_mcp_functions={
+        "codeact": {"url": "http://localhost:8000"},
+        "data_api": {"url": "http://localhost:8001"}
+    }
+)
+
+# Generates:
+# - ./workspace/codeact_mcp.py
+# - ./workspace/data_api_mcp.py
+
+# Agent can use both in scripts:
+# from codeact_mcp import read_file
+# from data_api_mcp import fetch_data
+```
+
+### Generated Module Structure
+
+Each generated module contains:
+- MCP session management (initialization, session ID tracking)
+- Type-hinted wrapper functions
+- Comprehensive docstrings
+- JSON-RPC 2.0 request formatting
+- Server-Sent Events (SSE) response parsing
+- Automatic session retry on expiry
+- Error handling
+
+Example generated module:
+
+```python
+# codeact_mcp.py (auto-generated)
+import json
+from typing import Dict, Any, Optional, List
+import requests
+
+SERVER_URL = "http://localhost:8000"
+HEADERS = {"Authorization": "Bearer token"}
+SESSION_ID: Optional[str] = None
+_request_id_counter = 0
+
+def _get_next_request_id() -> int:
+    """Get next unique request ID for JSON-RPC calls."""
+    global _request_id_counter
+    _request_id_counter += 1
+    return _request_id_counter
+
+def _initialize_session() -> str:
+    """Initialize MCP session via JSON-RPC initialize method."""
+    global SESSION_ID
+    payload = {
+        "jsonrpc": "2.0",
+        "id": _get_next_request_id(),
+        "method": "initialize",
+        "params": {
+            "protocolVersion": "2024-11-05",
+            "capabilities": {},
+            "clientInfo": {"name": "alfredo", "version": "1.0.0"}
+        }
+    }
+    response = requests.post(SERVER_URL, json=payload, headers=HEADERS, timeout=10)
+    session_id = response.headers.get("Mcp-Session-Id")
+    SESSION_ID = session_id
+
+    # Send initialized notification
+    if session_id:
+        notif = {"jsonrpc": "2.0", "method": "notifications/initialized"}
+        requests.post(SERVER_URL, json=notif, headers={**HEADERS, "Mcp-Session-Id": session_id}, timeout=5)
+
+    return session_id or ""
+
+def _ensure_session() -> None:
+    """Ensure valid session exists."""
+    if SESSION_ID is None:
+        _initialize_session()
+
+def read_file(path: str) -> Dict[str, Any]:
+    """Read a file from the filesystem.
+
+    Args:
+        path: Path to the file to read
+
+    Returns:
+        Tool result as dictionary
+
+    Raises:
+        RuntimeError: If HTTP request fails
+    """
+    _ensure_session()
+
+    payload = {
+        "jsonrpc": "2.0",
+        "id": _get_next_request_id(),
+        "method": "tools/call",
+        "params": {
+            "name": "read_file",
+            "arguments": {"path": path}
+        }
+    }
+
+    headers = {"Accept": "application/json, text/event-stream", "Content-Type": "application/json", **HEADERS}
+    if SESSION_ID:
+        headers["Mcp-Session-Id"] = SESSION_ID
+
+    try:
+        response = requests.post(SERVER_URL, json=payload, headers=headers, timeout=30)
+        response.raise_for_status()
+
+        # Parse SSE or JSON response
+        content_type = response.headers.get("Content-Type", "")
+        if "text/event-stream" in content_type:
+            result = _parse_sse_response(response)
+        else:
+            result = response.json()
+
+        if "error" in result:
+            raise RuntimeError(f"JSON-RPC error {result['error'].get('code')}: {result['error'].get('message')}")
+
+        # Extract and parse text content from MCP response
+        if "result" in result:
+            content = result["result"].get("content", [])
+            if content and isinstance(content, list) and len(content) > 0:
+                if content[0].get("type") == "text":
+                    text = content[0].get("text", "")
+                    if text:
+                        return json.loads(text)  # Returns parsed dictionary
+            raise RuntimeError("No text content found in MCP response")
+
+    except requests.RequestException as e:
+        raise RuntimeError(f"MCP tool 'read_file' failed: {e}")
+```
+
+### Standalone Usage
+
+You can also use the wrapper generator independently:
+
+```python
+from alfredo.integrations.mcp_http_wrapper import MCPWrapperGenerator
+
+# Create generator
+generator = MCPWrapperGenerator(
+    server_url="http://localhost:8000",
+    name="mytools",
+    headers={"Authorization": "Bearer token"}
+)
+
+# Fetch schema
+tools = generator.fetch_tools_schema()
+print(f"Found {len(tools)} tools")
+
+# Generate module
+generator.generate_module("./mytools_mcp.py")
+
+# Get module info
+info = generator.get_module_info()
+for func in info['functions']:
+    print(f"  - {func['signature']}")
+
+# Import and use
+from mytools_mcp import some_tool
+result = some_tool(param="value")
+```
+
+### System Prompt Injection
+
+The agent's system prompt automatically includes documentation about available modules:
+
+```
+# MCP HTTP Module: codeact_mcp
+
+The following Python module is available in your working directory for use in scripts:
+
+## Import Statement
+```python
+from codeact_mcp import read_file, write_file, execute_cmd
+```
+
+## Available Functions
+
+- `read_file(path: str) -> Dict[str, Any]` - Read file from filesystem
+- `write_file(path: str, content: str) -> Dict[str, Any]` - Write file
+- `execute_cmd(command: str) -> Dict[str, Any]` - Execute command
+
+These functions make HTTP calls to the MCP server at http://localhost:8000.
+Use them in Python scripts executed via the execute_command tool.
+```
+
+### MCP Server Requirements
+
+The MCP server must implement the official Model Context Protocol using JSON-RPC 2.0:
+
+**Protocol:** JSON-RPC 2.0 over HTTP with Server-Sent Events (SSE) responses
+**Transport:** HTTP POST to single endpoint
+**Response Format:** `Content-Type: text/event-stream` (SSE)
+
+**1. Session Initialization**
+
+Request:
+```json
+{
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "initialize",
+    "params": {
+        "protocolVersion": "2024-11-05",
+        "capabilities": {},
+        "clientInfo": {"name": "client-name", "version": "1.0.0"}
+    }
+}
+```
+
+Response headers: `Mcp-Session-Id: <session-id>`
+
+Client must then send:
+```json
+{
+    "jsonrpc": "2.0",
+    "method": "notifications/initialized"
+}
+```
+With header: `Mcp-Session-Id: <session-id>`
+
+**2. List Tools (tools/list)**
+
+Request:
+```json
+{
+    "jsonrpc": "2.0",
+    "id": 2,
+    "method": "tools/list"
+}
+```
+
+Response (SSE format):
+```
+data: {"result": {"tools": [{"name": "tool_name", "description": "...", "inputSchema": {...}}]}}
+```
+
+**3. Call Tool (tools/call)**
+
+Request:
+```json
+{
+    "jsonrpc": "2.0",
+    "id": 3,
+    "method": "tools/call",
+    "params": {
+        "name": "tool_name",
+        "arguments": {"param_name": "value"}
+    }
+}
+```
+
+Response (SSE format):
+```
+data: {"result": {"content": [{"type": "text", "text": "result data"}]}}
+```
+
+**Reference Implementation:**
+See the official MCP specification: https://spec.modelcontextprotocol.io/
+Example MCP servers: https://github.com/modelcontextprotocol/servers
+
+### Type Mapping
+
+JSON Schema types are automatically mapped to Python types:
+
+| JSON Schema | Python Type |
+|-------------|-------------|
+| `string` | `str` |
+| `integer` | `int` |
+| `number` | `float` |
+| `boolean` | `bool` |
+| `array` | `List[Any]` |
+| `object` | `Dict[str, Any]` |
+| `null` | `None` |
+
+Optional parameters use `Optional[type] = None`.
+
+### Examples
+
+```bash
+# Run MCP HTTP wrapper example
+uv run python examples/mcp_http_agent_example.py
+
+# Run tests
+uv run pytest tests/test_mcp_http_wrapper.py -v
+```
+
+### Use Cases
+
+**1. Script-based tool chaining:**
+```python
+# Agent can generate scripts that chain multiple tool calls
+from codeact_mcp import read_file, execute_cmd, write_file
+
+config = read_file("config.json")
+result = execute_cmd(f"process {config['data']}")
+write_file("output.txt", result["stdout"])
+```
+
+**2. Complex data processing:**
+```python
+# Import tools from multiple servers
+from codeact_mcp import read_file
+from data_api_mcp import fetch_data, process_data
+
+local = read_file("data.json")
+remote = fetch_data(endpoint="/metrics")
+result = process_data(local=local, remote=remote)
+```
+
+**3. Generated code artifacts:**
+Agents can generate standalone Python scripts that users can run independently, using the MCP wrapper modules.
+
 ## Architecture
 
 Alfredo provides a layered architecture with multiple usage patterns to fit different use cases.
