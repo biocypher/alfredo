@@ -1288,6 +1288,46 @@ agent.run("Generate alt text for the image at photo.jpg")
 agent.run("Does the chart in metrics.png show an upward trend?")
 ```
 
+### Advanced Example: Self-Verifying Visualizations
+
+Agents can create visualizations and then verify them by analyzing the output images:
+
+```python
+from alfredo import Agent
+
+# Create an agent with vision capabilities
+agent = Agent(
+    cwd=".",
+    model_name="gpt-4.1-mini",       # Main model for planning and reasoning
+    vision_model="gpt-4.1-mini",     # Vision model for image analysis
+    parse_reasoning=True,
+    verbose=True
+)
+
+# Agent creates visualization AND verifies it by looking at it
+agent.run("""
+Create a Python script that computes an approximation of pi using the Monte Carlo method.
+Also create a visualization of the results and save it as a PNG file.
+Make sure that the plot is correct by analyzing the image.
+If you miss some package, use uv to initialize a venv and then add what is missing.
+""")
+
+# View execution trace to see vision tool in action
+agent.display_trace()
+```
+
+**What happens:**
+1. Agent writes the Monte Carlo simulation code
+2. Agent runs the code and generates a plot
+3. Agent uses `analyze_image` to verify the visualization is correct
+4. Agent iterates if issues are found (e.g., missing labels, incorrect data)
+
+This pattern enables:
+- **Quality assurance**: Agents can verify their own outputs
+- **Error detection**: Catch visualization issues before delivery
+- **Iterative refinement**: Improve plots based on visual feedback
+- **Documentation**: Generate accurate descriptions of visualizations
+
 ### LangChain Integration
 
 The vision tool works seamlessly with LangChain:
