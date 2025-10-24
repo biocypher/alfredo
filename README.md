@@ -137,7 +137,7 @@ Alfredo includes 11 built-in tools organized by category:
 
 Alfredo supports two modes of MCP integration:
 
-### CodeAct Mode (Recommended)
+### CodeAct Mode
 
 Generate importable Python modules from MCP servers, allowing agents to use tools as regular functions instead of through ReAct loops:
 
@@ -172,7 +172,7 @@ agent.run("Write a script that gets the interactors of gene ENSG00000141510 and 
 - ✅ Session management with automatic retry
 - ✅ Script-based tool chaining
 
-### ReAct Mode (Alternative)
+### ReAct Mode
 
 Use MCP tools directly through LangChain's tool calling:
 
