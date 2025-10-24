@@ -12,7 +12,8 @@ Alfredo provides a LangGraph-based agentic scaffold that combines planning, exec
 ## Key Features
 
 - 🤖 **Autonomous Agent** - Plan-verify-replan loop with automatic task decomposition
-- 🔧 **10 Built-in Tools** - File ops, commands, discovery, code analysis, and workflow control
+- 🔧 **11 Built-in Tools** - File ops, commands, discovery, code analysis, vision, and workflow control
+- 👁️ **Vision Capabilities** - Analyze images with multimodal models
 - 🔗 **MCP Integration** - Connect to any Model Context Protocol server
 - 🎯 **Model Agnostic** - OpenAI, Anthropic, or any LangChain-supported LLM
 - 📊 **Execution Tracing** - Detailed visibility into agent actions
@@ -57,6 +58,46 @@ agent.display_trace()
 print(agent.results["final_answer"])
 ```
 
+## Vision-Enabled Agents
+
+Alfredo agents can analyze images using vision models, enabling powerful workflows where agents can verify their own visual outputs:
+
+```python
+from alfredo import Agent
+
+# Create an agent with vision capabilities
+agent = Agent(
+    cwd=".",
+    model_name="gpt-4.1-mini",       # Main model for planning and reasoning
+    vision_model="gpt-4.1-mini",     # Vision model for image analysis
+    parse_reasoning=True
+)
+
+# Agent creates visualization AND verifies it by looking at it
+agent.run("""
+Create a Python script that computes an approximation of pi using the Monte Carlo method.
+Also create a visualization of the results and save it as a PNG file.
+Make sure that the plot is correct by analyzing the image.
+If you miss some package, use uv to initialize a venv and then add what is missing.
+""")
+
+# View execution trace to see vision tool in action
+agent.display_trace()
+```
+
+**What happens:**
+1. Agent writes the Monte Carlo simulation code
+2. Agent runs the code and generates a plot
+3. Agent uses `analyze_image` to verify the visualization is correct
+4. Agent iterates if issues are found
+
+**Use cases for vision:**
+- 📸 Screenshot analysis for UI testing
+- 📊 Chart and diagram verification
+- 📝 OCR and document processing
+- 🎨 Image description and captioning
+- ✅ Visual quality assurance
+
 ## Architecture
 
 Alfredo uses a **LangGraph state graph** with the following nodes:
@@ -79,7 +120,7 @@ Planning can be disabled to start execution directly at the agent node.
 
 ## Available Tools
 
-Alfredo includes 10 built-in tools organized by category:
+Alfredo includes 11 built-in tools organized by category:
 
 | Category | Tools |
 |----------|-------|
@@ -87,6 +128,7 @@ Alfredo includes 10 built-in tools organized by category:
 | **Discovery** | `list_files`, `search_files` |
 | **Code Analysis** | `list_code_definition_names` |
 | **Commands** | `execute_command` |
+| **Vision** | `analyze_image` |
 | **Workflow** | `ask_followup_question`, `attempt_completion` |
 
 **[Read More: Tools Documentation →](https://github.com/biocypher/alfredo/blob/main/docs/tools.md)**
