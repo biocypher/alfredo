@@ -14,16 +14,20 @@ from alfredo.agentic.prompts import (
     get_replan_prompt,
     get_verification_prompt,
 )
+from alfredo.agentic.reasoning_parser import parse_reasoning_from_response
 from alfredo.agentic.state import AgentState
 
 
-def create_planner_node(model: BaseChatModel, tools: list[Any], template: Optional[str] = None) -> Any:
+def create_planner_node(
+    model: BaseChatModel, tools: list[Any], template: Optional[str] = None, parse_reasoning: bool = False
+) -> Any:
     """Create the planner node that generates initial implementation plans.
 
     Args:
         model: The language model to use for planning
         tools: List of AlfredoTools (for extracting node-specific instructions)
         template: Optional custom prompt template
+        parse_reasoning: Whether to parse <think> tags from responses
 
     Returns:
         Planner node function
@@ -48,6 +52,10 @@ def create_planner_node(model: BaseChatModel, tools: list[Any], template: Option
         messages = [HumanMessage(content=planning_prompt)]
         response = model.invoke(messages)
 
+        # Parse reasoning if enabled
+        if parse_reasoning:
+            response = parse_reasoning_from_response(response)
+
         plan = response.content if hasattr(response, "content") else str(response)
 
         return {
@@ -59,13 +67,16 @@ def create_planner_node(model: BaseChatModel, tools: list[Any], template: Option
     return planner_node
 
 
-def create_agent_node(model: BaseChatModel, tools: list[Any], template: Optional[str] = None) -> Any:
+def create_agent_node(
+    model: BaseChatModel, tools: list[Any], template: Optional[str] = None, parse_reasoning: bool = False
+) -> Any:
     """Create the agent node that performs reasoning and tool calling.
 
     Args:
         model: The language model with tools bound
         tools: List of AlfredoTools (for extracting node-specific instructions)
         template: Optional custom prompt template
+        parse_reasoning: Whether to parse <think> tags from responses
 
     Returns:
         Agent node function
@@ -102,6 +113,10 @@ def create_agent_node(model: BaseChatModel, tools: list[Any], template: Optional
 
         # Invoke model with full context
         response = model.invoke(full_messages)
+
+        # Parse reasoning if enabled
+        if parse_reasoning:
+            response = parse_reasoning_from_response(response)
 
         # Return updated messages
         # If this was the first iteration (messages was empty), return both the human message and response
@@ -250,13 +265,16 @@ def format_execution_trace(messages: Sequence) -> str:  # noqa: C901
     return "\n".join(trace_lines)
 
 
-def create_verifier_node(model: BaseChatModel, tools: list[Any], template: Optional[str] = None) -> Any:
+def create_verifier_node(
+    model: BaseChatModel, tools: list[Any], template: Optional[str] = None, parse_reasoning: bool = False
+) -> Any:
     """Create the verifier node that checks if answers satisfy the task.
 
     Args:
         model: The language model to use for verification
         tools: List of AlfredoTools (for extracting node-specific instructions)
         template: Optional custom prompt template
+        parse_reasoning: Whether to parse <think> tags from responses
 
     Returns:
         Verifier node function
@@ -291,6 +309,10 @@ def create_verifier_node(model: BaseChatModel, tools: list[Any], template: Optio
         messages = [HumanMessage(content=verification_prompt)]
         response = model.invoke(messages)
 
+        # Parse reasoning if enabled
+        if parse_reasoning:
+            response = parse_reasoning_from_response(response)
+
         response_text = str(response.content) if hasattr(response, "content") else str(response)
 
         # Parse verification result
@@ -304,13 +326,16 @@ def create_verifier_node(model: BaseChatModel, tools: list[Any], template: Optio
     return verifier_node
 
 
-def create_replan_node(model: BaseChatModel, tools: list[Any], template: Optional[str] = None) -> Any:
+def create_replan_node(
+    model: BaseChatModel, tools: list[Any], template: Optional[str] = None, parse_reasoning: bool = False
+) -> Any:
     """Create the replan node that generates new plans after verification failure.
 
     Args:
         model: The language model to use for replanning
         tools: List of AlfredoTools (for extracting node-specific instructions)
         template: Optional custom prompt template
+        parse_reasoning: Whether to parse <think> tags from responses
 
     Returns:
         Replan node function
@@ -346,6 +371,10 @@ def create_replan_node(model: BaseChatModel, tools: list[Any], template: Optiona
         # Generate new plan
         planning_messages = [HumanMessage(content=replan_prompt)]
         response = model.invoke(planning_messages)
+
+        # Parse reasoning if enabled
+        if parse_reasoning:
+            response = parse_reasoning_from_response(response)
 
         new_plan = response.content if hasattr(response, "content") else str(response)
 

@@ -127,6 +127,7 @@ def create_agentic_graph(
     recursion_limit: int = 50,
     enable_planning: bool = True,
     prompt_templates: Optional[PromptTemplates] = None,
+    parse_reasoning: bool = False,
     **kwargs: Any,
 ) -> Any:
     """Create the agentic scaffold state graph.
@@ -139,6 +140,7 @@ def create_agentic_graph(
         recursion_limit: Maximum number of graph steps before raising an error (default: 50)
         enable_planning: Whether to use the planner node. If False, starts directly at agent node (default: True)
         prompt_templates: Optional custom prompt templates for each node
+        parse_reasoning: Whether to parse <think> tags from model responses (default: False)
         **kwargs: Additional keyword arguments to pass to the model
 
     Returns:
@@ -181,15 +183,23 @@ def create_agentic_graph(
     verifier_template = prompt_templates.verifier if prompt_templates else None
     replan_template = prompt_templates.replan if prompt_templates else None
 
-    # Create nodes (pass normalized tools and templates)
-    agent_node = create_agent_node(model_with_tools, tools=normalized_tools, template=agent_template)
+    # Create nodes (pass normalized tools, templates, and parse_reasoning flag)
+    agent_node = create_agent_node(
+        model_with_tools, tools=normalized_tools, template=agent_template, parse_reasoning=parse_reasoning
+    )
     tools_node = create_tools_node(langchain_tools)
-    verifier_node = create_verifier_node(model, tools=normalized_tools, template=verifier_template)
+    verifier_node = create_verifier_node(
+        model, tools=normalized_tools, template=verifier_template, parse_reasoning=parse_reasoning
+    )
 
     # Conditionally create planner and replan nodes
     if enable_planning:
-        planner_node = create_planner_node(model, tools=normalized_tools, template=planner_template)
-        replan_node = create_replan_node(model, tools=normalized_tools, template=replan_template)
+        planner_node = create_planner_node(
+            model, tools=normalized_tools, template=planner_template, parse_reasoning=parse_reasoning
+        )
+        replan_node = create_replan_node(
+            model, tools=normalized_tools, template=replan_template, parse_reasoning=parse_reasoning
+        )
 
     # Create state graph
     graph = StateGraph(AgentState)
@@ -259,6 +269,7 @@ def run_agentic_task(
     tools: Optional[list] = None,
     recursion_limit: int = 50,
     enable_planning: bool = True,
+    parse_reasoning: bool = False,
     **kwargs: Any,
 ) -> dict[str, Any]:
     """Run an agentic task from start to finish.
@@ -276,6 +287,7 @@ def run_agentic_task(
             Can include MCP tools loaded via alfredo.integrations.mcp
         recursion_limit: Maximum number of graph steps (default: 50)
         enable_planning: Whether to use the planner node. If False, starts directly at agent (default: True)
+        parse_reasoning: Whether to parse <think> tags from model responses (default: False)
         **kwargs: Additional keyword arguments to pass to the model
 
     Returns:
@@ -297,6 +309,7 @@ def run_agentic_task(
         verbose=verbose,
         recursion_limit=recursion_limit,
         enable_planning=enable_planning,
+        parse_reasoning=parse_reasoning,
         **kwargs,
     )
 

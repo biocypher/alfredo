@@ -37,6 +37,7 @@ class Agent:
         verbose: bool = True,
         recursion_limit: int = 50,
         enable_planning: bool = True,
+        parse_reasoning: bool = False,
         codeact_mcp_functions: Optional[dict[str, dict[str, Any]]] = None,
         **kwargs: Any,
     ) -> None:
@@ -52,6 +53,8 @@ class Agent:
             recursion_limit: Maximum number of graph steps (default: 50)
             enable_planning: Whether to use the planner node for creating implementation plans.
                 If False, agent starts directly without planning step (default: True)
+            parse_reasoning: Whether to parse <think> tags from model responses and store in
+                AIMessage.additional_kwargs['reasoning'] (default: False)
             codeact_mcp_functions: Optional MCP server configurations for generating
                 importable Python wrapper modules. Format: {"name": {"url": "...", "headers": {...}}}
             **kwargs: Additional keyword arguments to pass to the model
@@ -63,6 +66,7 @@ class Agent:
         self.verbose = verbose
         self.recursion_limit = recursion_limit
         self.enable_planning = enable_planning
+        self.parse_reasoning = parse_reasoning
         self.model_kwargs = kwargs
 
         # Normalize tools (wrap plain StructuredTools as AlfredoTools)
@@ -89,6 +93,7 @@ class Agent:
             tools=self.tools,
             recursion_limit=recursion_limit,
             enable_planning=enable_planning,
+            parse_reasoning=parse_reasoning,
             prompt_templates=self.prompt_templates,
             **kwargs,
         )
@@ -607,6 +612,7 @@ class Agent:
             tools=self.tools,
             recursion_limit=self.recursion_limit,
             enable_planning=self.enable_planning,
+            parse_reasoning=self.parse_reasoning,
             prompt_templates=self.prompt_templates,
             **self.model_kwargs,
         )
@@ -661,6 +667,7 @@ class Agent:
         - All messages exchanged (HumanMessage, AIMessage, ToolMessage, etc.)
         - Tool calls made by the agent with their arguments
         - Tool responses
+        - Reasoning content (if parse_reasoning was enabled)
 
         Raises:
             RuntimeError: If run() hasn't been called yet
@@ -690,6 +697,12 @@ class Agent:
         for i, msg in enumerate(messages):
             print(f"\n--- Message {i + 1} ---")
             print(f"Type: {type(msg).__name__}")
+
+            # Print reasoning content if present (AIMessage with parse_reasoning enabled)
+            if hasattr(msg, "additional_kwargs") and msg.additional_kwargs:
+                reasoning = msg.additional_kwargs.get("reasoning")
+                if reasoning:
+                    print(f"Reasoning: {reasoning[:300]}..." if len(reasoning) > 300 else f"Reasoning: {reasoning}")
 
             # Print message content
             if hasattr(msg, "content"):
