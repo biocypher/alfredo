@@ -118,17 +118,22 @@ class MCPWrapperGenerator:
 
             # Extract session ID from response headers
             session_id = response.headers.get("Mcp-Session-Id")
-            if not session_id:
-                # Try to parse from response body if not in headers
-                result = response.json()
-                if "error" in result:
-                    error = result["error"]
-                    msg = f"MCP initialize error: {error.get('message', 'Unknown error')}"
-                    raise ValueError(msg)
 
+            # Parse response to check for errors
+            # Some servers return SSE, others return plain JSON
+            content_type = response.headers.get("Content-Type", "")
+            result = self._parse_sse_response(response) if "text/event-stream" in content_type else response.json()
+
+            # Check for JSON-RPC errors in response
+            if "error" in result:
+                error = result["error"]
+                msg = f"MCP initialize error: {error.get('message', 'Unknown error')}"
+                raise ValueError(msg)
+
+            # Store session ID (may be None for servers that don't use session-based auth)
             self.session_id = session_id
 
-            # Send initialized notification
+            # Send initialized notification if we have a session ID
             if session_id:
                 notif_payload = {
                     "jsonrpc": "2.0",
@@ -141,8 +146,9 @@ class MCPWrapperGenerator:
                     **self.headers,
                 }
                 requests.post(self.server_url, json=notif_payload, headers=notif_headers, timeout=5)
-                return session_id or ""
-            return ""  # noqa: TRY300
+                return session_id
+            else:
+                return ""
 
         except requests.RequestException as e:
             msg = f"Failed to initialize MCP session at {self.server_url}: {e}"
@@ -507,16 +513,26 @@ def _initialize_session() -> str:
 
         # Extract session ID from response headers
         session_id = response.headers.get("Mcp-Session-Id")
-        if not session_id:
-            # Try to parse from response body
-            result = response.json()
-            if "error" in result:
-                error = result["error"]
-                raise RuntimeError(f"MCP initialize error: {{error.get('message', 'Unknown error')}}")
 
+        # Parse response to check for errors
+        # Some servers return SSE, others return plain JSON
+        content_type = response.headers.get("Content-Type", "")
+        if "text/event-stream" in content_type:
+            # Parse SSE response (e.g., remote servers)
+            result = _parse_sse_response(response)
+        else:
+            # Parse regular JSON response (e.g., local servers)
+            result = response.json()
+
+        # Check for JSON-RPC errors in response
+        if "error" in result:
+            error = result["error"]
+            raise RuntimeError(f"MCP initialize error: {{error.get('message', 'Unknown error')}}")
+
+        # Store session ID (may be None for servers that don't use session-based auth)
         SESSION_ID = session_id
 
-        # Send initialized notification
+        # Send initialized notification if we have a session ID
         if session_id:
             notif_payload = {{
                 "jsonrpc": "2.0",

@@ -137,10 +137,11 @@ class TestMCPWrapperGenerator:
         self, mock_post: Mock, generator: MCPWrapperGenerator, sample_tools_schema: list[dict]
     ) -> None:
         """Test fetching tools schema via JSON-RPC."""
-        # Mock session initialization
+        # Mock session initialization (SSE format with session ID)
         init_response = Mock()
-        init_response.headers = {"Mcp-Session-Id": "test-session-123"}
+        init_response.headers = {"Mcp-Session-Id": "test-session-123", "Content-Type": "text/event-stream"}
         init_response.raise_for_status = Mock()
+        init_response.iter_lines = Mock(return_value=['data: {"result": {"protocolVersion": "2024-11-05"}}'])
 
         # Mock tools/list response (SSE format)
         tools_response = Mock()
@@ -180,10 +181,11 @@ class TestMCPWrapperGenerator:
     @patch("requests.post")
     def test_fetch_tools_schema_invalid_json(self, mock_post: Mock, generator: MCPWrapperGenerator) -> None:
         """Test invalid JSON response handling."""
-        # Mock session initialization
+        # Mock session initialization (SSE format with session ID)
         init_response = Mock()
-        init_response.headers = {"Mcp-Session-Id": "test-session-123"}
+        init_response.headers = {"Mcp-Session-Id": "test-session-123", "Content-Type": "text/event-stream"}
         init_response.raise_for_status = Mock()
+        init_response.iter_lines = Mock(return_value=['data: {"result": {"protocolVersion": "2024-11-05"}}'])
 
         # Mock notification response
         notif_response = Mock()
@@ -203,10 +205,11 @@ class TestMCPWrapperGenerator:
     @patch("requests.post")
     def test_fetch_tools_schema_jsonrpc_error(self, mock_post: Mock, generator: MCPWrapperGenerator) -> None:
         """Test JSON-RPC error response handling."""
-        # Mock session initialization
+        # Mock session initialization (SSE format with session ID)
         init_response = Mock()
-        init_response.headers = {"Mcp-Session-Id": "test-session-123"}
+        init_response.headers = {"Mcp-Session-Id": "test-session-123", "Content-Type": "text/event-stream"}
         init_response.raise_for_status = Mock()
+        init_response.iter_lines = Mock(return_value=['data: {"result": {"protocolVersion": "2024-11-05"}}'])
 
         # Mock notification response
         notif_response = Mock()
