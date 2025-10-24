@@ -135,7 +135,46 @@ Alfredo includes 11 built-in tools organized by category:
 
 ## MCP Integration
 
-Extend Alfredo with any MCP-compatible server:
+Alfredo supports two modes of MCP integration:
+
+### CodeAct Mode (Recommended)
+
+Generate importable Python modules from MCP servers, allowing agents to use tools as regular functions instead of through ReAct loops:
+
+```python
+from alfredo import Agent
+
+# Configure remote MCP server (supports both local and remote)
+agent = Agent(
+    cwd="./workspace",
+    model_name="gpt-4.1-mini",
+    codeact_mcp_functions={
+        "biocontext": {
+            "url": "https://mcp.biocontext.ai/mcp/",  # Remote or local server
+        }
+    },
+    verbose=True
+)
+
+# Agent can now import and use MCP tools in scripts:
+agent.run("Write a script that gets the interactors of gene ENSG00000141510 and save to interactors.txt")
+
+# Agent generates code like:
+# from biocontext_mcp import bc_get_protein_interactors
+# result = bc_get_protein_interactors(gene_id="ENSG00000141510")
+```
+
+**Features:**
+- ✅ Works with **remote** servers (e.g., `https://mcp.biocontext.ai/mcp/`)
+- ✅ Works with **local** servers (e.g., `http://localhost:8000`)
+- ✅ Auto-generates typed Python wrapper modules
+- ✅ Supports SSE and JSON-RPC 2.0 protocols
+- ✅ Session management with automatic retry
+- ✅ Script-based tool chaining
+
+### ReAct Mode (Alternative)
+
+Use MCP tools directly through LangChain's tool calling:
 
 ```python
 from alfredo import Agent

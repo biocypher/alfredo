@@ -317,9 +317,12 @@ Alfredo provides a powerful MCP HTTP wrapper generator that allows agents to imp
 
 The MCP HTTP wrapper generator:
 - Connects to MCP servers using the official JSON-RPC 2.0 protocol
+- **Supports both local and remote servers** (HTTP and HTTPS)
+- **Auto-detects response format** (SSE or plain JSON)
 - Fetches tool schemas via the `tools/list` method
 - Generates importable Python modules with typed wrapper functions
 - Handles session management and Server-Sent Events (SSE) responses
+- Works with sessionless servers (e.g., `https://mcp.biocontext.ai/mcp/`)
 - Stores modules in the agent's working directory
 - Automatically injects usage instructions into system prompts
 - Enables agents to write scripts that chain tool calls
@@ -333,10 +336,11 @@ uv add requests
 
 ### Basic Usage
 
+**Local Server:**
 ```python
 from alfredo import Agent
 
-# Create agent with MCP server configuration
+# Create agent with local MCP server
 agent = Agent(
     cwd="./workspace",
     model_name="gpt-4.1-mini",
@@ -359,6 +363,41 @@ agent = Agent(
 # from codeact_mcp import read_file, write_file
 # data = read_file("/config.json")  # Returns parsed dictionary
 # write_file("/output.txt", data["some_field"])
+```
+
+**Remote Server (SSE-based):**
+```python
+from alfredo import Agent
+
+# Create agent with remote MCP server (e.g., BioContext.AI)
+agent = Agent(
+    cwd="./workspace",
+    model_name="gpt-4.1-mini",
+    codeact_mcp_functions={
+        "biocontext": {
+            "url": "https://mcp.biocontext.ai/mcp/",  # Remote server with SSE responses
+        }
+    },
+    verbose=True
+)
+
+# Agent automatically handles:
+# - Server-Sent Events (SSE) response format
+# - Sessionless authentication
+# - 49 biomedical knowledge base tools
+
+# Example task using biocontext tools:
+agent.run("""
+Write a script that leverages available functions to get the interactors
+of a gene in the human interactome. Test it with ENSG00000141510 and save
+output in a file called interactors.txt
+""")
+
+# Agent generates code like:
+# from biocontext_mcp import bc_get_protein_interactors
+# result = bc_get_protein_interactors(gene_id="ENSG00000141510")
+# with open("interactors.txt", "w") as f:
+#     f.write(str(result))
 ```
 
 ### Configuration Format
@@ -569,9 +608,13 @@ Use them in Python scripts executed via the execute_command tool.
 
 The MCP server must implement the official Model Context Protocol using JSON-RPC 2.0:
 
-**Protocol:** JSON-RPC 2.0 over HTTP with Server-Sent Events (SSE) responses
+**Protocol:** JSON-RPC 2.0 over HTTP
 **Transport:** HTTP POST to single endpoint
-**Response Format:** `Content-Type: text/event-stream` (SSE)
+**Response Format:**
+- `Content-Type: text/event-stream` (SSE) - **Remote servers**
+- `Content-Type: application/json` - **Local servers**
+
+Alfredo **automatically detects** the response format and parses accordingly.
 
 **1. Session Initialization**
 
@@ -659,8 +702,11 @@ Optional parameters use `Optional[type] = None`.
 ### Examples
 
 ```bash
-# Run MCP HTTP wrapper example
+# Run local MCP HTTP wrapper example
 uv run python examples/mcp_http_agent_example.py
+
+# Run remote MCP server example (BioContext.AI)
+uv run python examples/mcp_http_remote_biocontext.py
 
 # Run tests
 uv run pytest tests/test_mcp_http_wrapper.py -v
