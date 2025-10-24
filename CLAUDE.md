@@ -1103,6 +1103,8 @@ The core tool system allows AI agents to interact with the environment through a
 - **File Discovery** (`discovery.py`) - List directories, search with regex
 - **Code Analysis** (`code_analysis.py`) - List code definitions using tree-sitter
 - **Web Tools** (`web.py`) - Fetch and convert web content to markdown
+- **Vision Tools** (`vision.py`) - Analyze images with vision models
+  - `analyze_image` - Analyze images using vision models (GPT-4V, Claude 3.5 Sonnet, etc.)
 - **Workflow Control** (`workflow.py`) - Ask questions, signal completion
 
 **Key Components:**
@@ -1160,6 +1162,200 @@ START → planner → agent ⇄ tools → verifier
 - `agentic/nodes.py` - Node implementations
 - `agentic/state.py` - State type definitions
 - `agentic/prompts.py` - System prompts for each node
+
+## Vision Tool (Image Analysis)
+
+Alfredo includes a vision tool that allows agents to analyze images using vision models like GPT-4 Vision or Claude 3.5 Sonnet.
+
+### Basic Usage
+
+```python
+from alfredo import Agent
+
+# Option 1: Use default vision model (gpt-4o-mini)
+agent = Agent(cwd=".", model_name="gpt-4.1-mini")
+agent.run("Analyze screenshot.png and describe what UI elements are visible")
+
+# Option 2: Specify vision model in Agent constructor (recommended)
+agent = Agent(
+    cwd=".",
+    model_name="gpt-4.1-mini",  # Main agent model
+    vision_model="gpt-4o"        # Vision-specific model
+)
+agent.run("Analyze screenshot.png")
+agent.display_trace()
+
+# Option 3: Use Claude 3.5 Sonnet for vision
+agent = Agent(
+    cwd=".",
+    model_name="gpt-4.1-mini",
+    vision_model="anthropic:claude-3-5-sonnet-latest"
+)
+agent.run("Extract text from document.jpg")
+```
+
+### Direct Tool Usage
+
+```xml
+<analyze_image>
+<path>path/to/image.png</path>
+<prompt>Describe this image in detail</prompt>
+</analyze_image>
+```
+
+**Optional parameters:**
+- `prompt` - Question or instruction for the vision model (default: "Describe this image in detail.")
+- `model` - Vision model to use (default: from `ALFREDO_VISION_MODEL` env var or "gpt-4o-mini")
+
+### Configuration
+
+You can control which vision model is used in four ways (in order of priority):
+
+1. **Per-call parameter** - Specify model in each tool call:
+```xml
+<analyze_image>
+<path>screenshot.png</path>
+<prompt>What UI elements are visible?</prompt>
+<model>anthropic:claude-3-5-sonnet-latest</model>
+</analyze_image>
+```
+
+2. **Agent constructor** - Set default for the agent instance (recommended):
+```python
+agent = Agent(
+    cwd=".",
+    model_name="gpt-4.1-mini",
+    vision_model="gpt-4o"  # All vision calls will use this
+)
+```
+
+3. **Environment variable** - Set default for all agents:
+```bash
+export ALFREDO_VISION_MODEL="gpt-4o"
+# or
+export ALFREDO_VISION_MODEL="anthropic:claude-3-5-sonnet-latest"
+```
+
+4. **Default fallback** - Uses "gpt-4o-mini" if nothing specified
+
+### Supported Models
+
+The vision tool works with any vision-capable model supported by LangChain:
+
+**OpenAI:**
+- `gpt-4o` - Latest GPT-4 with vision
+- `gpt-4o-mini` - Faster, cheaper GPT-4 vision (default)
+- `gpt-4-turbo` - Previous generation
+
+**Anthropic:**
+- `anthropic:claude-3-5-sonnet-latest` - Claude 3.5 Sonnet with vision
+- `anthropic:claude-3-opus-latest` - Claude 3 Opus with vision
+
+**Note:** The vision model is separate from the agent's main model. The agent can use `gpt-4.1-mini` while the vision tool uses `gpt-4o`.
+
+### Supported Image Formats
+
+- JPG/JPEG
+- PNG
+- GIF
+- WebP
+- BMP
+
+### Common Use Cases
+
+**1. Screenshot Analysis**
+```python
+agent.run("Analyze the UI screenshot at ui_test.png and verify all buttons are visible")
+```
+
+**2. OCR (Text Extraction)**
+```python
+agent.run("Extract all text from the document scan at scan.jpg")
+```
+
+**3. Diagram Interpretation**
+```python
+agent.run("Explain the architecture diagram in diagram.png")
+```
+
+**4. Image Description**
+```python
+agent.run("Generate alt text for the image at photo.jpg")
+```
+
+**5. Visual QA**
+```python
+agent.run("Does the chart in metrics.png show an upward trend?")
+```
+
+### LangChain Integration
+
+The vision tool works seamlessly with LangChain:
+
+```python
+from alfredo.integrations.langchain import create_langchain_tools
+
+# Get all tools including vision
+tools = create_langchain_tools(cwd=".")
+
+# Or get specific tools
+tools = create_langchain_tools(
+    cwd=".",
+    tool_ids=["read_file", "analyze_image", "attempt_completion"]
+)
+
+# Use with any LangChain agent
+from langchain_anthropic import ChatAnthropic
+model = ChatAnthropic(model="claude-3-5-sonnet-20241022")
+agent = model.bind_tools(tools)
+```
+
+### How It Works
+
+1. **Image Loading** - Reads image file from local filesystem
+2. **Base64 Encoding** - Converts image to base64 for API transmission
+3. **Vision Model Call** - Sends image + prompt to vision model via LangChain
+4. **Response** - Returns model's analysis as text
+
+The tool uses LangChain's multimodal message format:
+
+```python
+message = HumanMessage(
+    content=[
+        {"type": "text", "text": prompt},
+        {
+            "type": "image_url",
+            "image_url": {"url": f"data:{mime_type};base64,{image_data}"},
+        },
+    ]
+)
+```
+
+### Examples
+
+```bash
+# Run vision tool example
+uv run python examples/vision_example.py
+
+# With custom image
+uv run python examples/vision_example.py path/to/image.png
+
+# Run tests
+uv run pytest tests/test_vision_tool.py -v
+```
+
+### Dependencies
+
+The vision tool requires:
+- `langchain-core` - For multimodal message support
+- API key for vision model:
+  - `OPENAI_API_KEY` for GPT-4 Vision
+  - `ANTHROPIC_API_KEY` for Claude 3.5 Sonnet
+
+```bash
+# Install dependencies
+uv add alfredo[agentic]
+```
 
 ## Adding New Tools
 

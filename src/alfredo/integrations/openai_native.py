@@ -107,6 +107,7 @@ def get_all_tools_openai_format(
         command,
         discovery,
         file_ops,
+        vision,
         web,
         workflow,
     )
@@ -159,6 +160,7 @@ class OpenAIAgent:
             command,
             discovery,
             file_ops,
+            vision,
             web,
             workflow,
         )

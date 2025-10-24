@@ -162,3 +162,8 @@ preview = true
 [tool.vulture]
 paths = ["src", "tests"]
 min_confidence = 80
+
+[tool.uv.workspace]
+members = [
+    "notebooks/sandbox",
+]

@@ -38,6 +38,7 @@ class Agent:
         recursion_limit: int = 50,
         enable_planning: bool = True,
         parse_reasoning: bool = False,
+        vision_model: Optional[str] = None,
         codeact_mcp_functions: Optional[dict[str, dict[str, Any]]] = None,
         **kwargs: Any,
     ) -> None:
@@ -55,11 +56,16 @@ class Agent:
                 If False, agent starts directly without planning step (default: True)
             parse_reasoning: Whether to parse <think> tags from model responses and store in
                 AIMessage.additional_kwargs['reasoning'] (default: False)
+            vision_model: Vision model to use for analyze_image tool (e.g., "gpt-4o",
+                "anthropic:claude-3-5-sonnet-latest"). If None, uses ALFREDO_VISION_MODEL
+                env var or defaults to "gpt-4o-mini"
             codeact_mcp_functions: Optional MCP server configurations for generating
                 importable Python wrapper modules. Format: {"name": {"url": "...", "headers": {...}}}
             **kwargs: Additional keyword arguments to pass to the model
                 (e.g., temperature, base_url, api_key)
         """
+        import os
+
         self.cwd = cwd
         self.model_name = model_name
         self.max_context_tokens = max_context_tokens
@@ -67,7 +73,13 @@ class Agent:
         self.recursion_limit = recursion_limit
         self.enable_planning = enable_planning
         self.parse_reasoning = parse_reasoning
+        self.vision_model = vision_model
         self.model_kwargs = kwargs
+
+        # Set vision model in environment if specified
+        # This allows the vision handler to pick it up
+        if vision_model:
+            os.environ["ALFREDO_VISION_MODEL"] = vision_model
 
         # Normalize tools (wrap plain StructuredTools as AlfredoTools)
         self.tools: Optional[list[Any]]
